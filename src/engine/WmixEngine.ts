@@ -1,5 +1,5 @@
 /** wMix Engine 0.1 — browser capture/composition; no OBS dependency. */
-export type WmixSource = { id: string; name: string; stream: MediaStream };
+export type WmixSource = { id: string; name: string; stream: MediaStream; kind: "camera" | "screen" };
 export type PipLayout = { x: number; y: number; width: number };
 export class WmixEngine {
   private sources = new Map<string, WmixSource>();
@@ -95,13 +95,13 @@ export class WmixEngine {
   }
   async addCamera(deviceId?: string) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
-    return this.addStream(stream, 'Câmera');
+    return this.addStream(stream, 'Câmera', 'camera');
   }
   /** Refresh a camera stream without changing its scene/source ID. */
   async reconnectCamera(id: string, deviceId?: string) {
     const source = this.sources.get(id);
     if (!source) throw new Error("Fonte não encontrada para reconexão");
-    if (!source.stream.getVideoTracks().length) throw new Error("A fonte não é uma câmera");
+    if (source.kind !== "camera") throw new Error("A fonte selecionada não é uma câmera");
     const previousTrack = source.stream.getVideoTracks()[0];
     const targetDevice = deviceId ?? previousTrack.getSettings?.().deviceId;
     const replacement = await navigator.mediaDevices.getUserMedia({
@@ -133,16 +133,16 @@ export class WmixEngine {
   }
   async addScreen() {
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-    return this.addStream(stream, 'Tela');
+    return this.addStream(stream, 'Tela', 'screen');
   }
-  private addStream(stream: MediaStream, label: string) {
+  private addStream(stream: MediaStream, label: string, kind: 'camera' | 'screen') {
     const id = crypto.randomUUID();
     const name = stream.getVideoTracks()[0]?.label || label;
     const video = document.createElement('video');
     video.autoplay = true; video.muted = true; video.playsInline = true; video.srcObject = stream;
     void video.play().catch(() => {});
     this.videos.set(id, video);
-    this.sources.set(id, { id, name, stream });
+    this.sources.set(id, { id, name, stream, kind });
     stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
       // Ignore delayed events after a source has already been removed.
       if (this.sources.get(id)?.stream === stream) this.remove(id);
