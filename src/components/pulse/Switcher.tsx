@@ -439,7 +439,7 @@ export function Switcher({ nativeSources = [], nativeProgram = null, nativeCut, 
             {pgm?.img ? (
               <img src={pgm.img} alt="" className="h-full w-full object-cover" draggable={false}
                 style={{ filter: pgm.filter, objectPosition: vMode === "track" ? `${30 + (pgmHead.pos % 40)}% 50%` : vMode === "safe" ? "20% 50%" : "50% 50%" }} />
-            ) : {renderFrame(pgm, "h-full")}}
+            ) : renderFrame(pgm, "h-full")}
             {vMode === "safe" && <div className="absolute inset-[8%_6%_14%] rounded border border-dashed border-primary/70" />}
             <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
           </div>
