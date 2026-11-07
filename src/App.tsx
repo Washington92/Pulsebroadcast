@@ -60,7 +60,21 @@ export default function App() {
   const [selectedVideo, setSelectedVideo] = useState("");
   const [showInputPicker, setShowInputPicker] = useState(false);
   const [splashVisible, setSplashVisible] = useState(true);
-  useEffect(() => { const timer = window.setTimeout(() => setSplashVisible(false), 1600); return () => window.clearTimeout(timer); }, []);
+  const [splashProgress, setSplashProgress] = useState(0);
+  useEffect(() => {
+    const started = performance.now();
+    let frame = 0;
+    const animate = (now: number) => {
+      const elapsed = now - started;
+      // Progress represents the startup animation, not a fabricated percentage of engine readiness.
+      const next = Math.min(100, Math.round(elapsed / 26));
+      setSplashProgress(next);
+      if (next < 100) frame = requestAnimationFrame(animate);
+      else frame = requestAnimationFrame(() => setSplashVisible(false));
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const [inputSearch, setInputSearch] = useState("");
   const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
@@ -252,14 +266,23 @@ export default function App() {
     }
   }
   return <>
-    {splashVisible && <div role="status" aria-label="Inicializando wMix" className="fixed inset-0 z-[300] flex items-center justify-center bg-[#080a0d] text-white">
-      <div className="flex flex-col items-center gap-5 text-center">
-        <div className="grid h-28 w-28 place-items-center rounded-[22px] border border-white/10 bg-[#050505] shadow-2xl shadow-black"><span className="text-4xl font-extrabold tracking-[-0.08em]">w<span className="text-[#46ed63]">M</span>ix</span></div>
-        <div><h1 className="text-2xl font-semibold tracking-tight">wMix</h1><p className="mt-1 text-xs tracking-[0.18em] text-slate-400">LIVE PRODUCTION</p></div>
-        <div className="h-1 w-44 overflow-hidden rounded-full bg-white/10"><div className="h-full w-1/2 animate-pulse rounded-full bg-slate-400" /></div>
-        <p className="text-[10px] text-slate-500">Powered by Ton Dantas</p>
-        <button type="button" onClick={() => setSplashVisible(false)} className="text-[10px] text-slate-500 hover:text-slate-300">Pular introdução</button>
+    {splashVisible && <div role="status" aria-label="Inicializando wMix" className="fixed inset-0 z-[300] flex items-center justify-center overflow-hidden bg-black text-white">
+      <div className="pointer-events-none absolute -left-[18%] -top-[45%] h-[70%] w-[90%] -rotate-[28deg] rounded-[100%] border-b-2 border-[#5dff23] bg-gradient-to-b from-transparent via-[#042609] to-[#08fa16]/50 shadow-[0_0_45px_#00ff00]" />
+      <div className="pointer-events-none absolute -bottom-[52%] -right-[18%] h-[90%] w-[100%] -rotate-[24deg] rounded-[100%] border-t-2 border-[#5dff23] bg-gradient-to-t from-transparent via-[#04300a] to-[#09ff17]/40 shadow-[0_0_50px_#00ff00]" />
+      <div className="relative flex w-full max-w-5xl flex-col items-center px-8 text-center">
+        <div className="relative text-[clamp(80px,13vw,180px)] font-black leading-none tracking-[-0.09em]">wMix<span className="absolute left-[64%] top-0 h-[0.12em] w-[0.4em] -skew-x-[28deg] bg-[#14ff00]" /></div>
+        <div className="mt-1 flex w-full max-w-3xl items-center gap-6"><span className="h-px flex-1 bg-gradient-to-l from-[#16ff00] to-transparent" /><p className="whitespace-nowrap text-[clamp(10px,1.6vw,20px)] tracking-[0.3em]">BROADCAST &amp; LIVE PRODUCTION</p><span className="h-px flex-1 bg-gradient-to-r from-[#16ff00] to-transparent" /></div>
+        <div className="mt-12 grid w-full max-w-3xl grid-cols-5 divide-x divide-[#13ff00]/40 text-xs sm:text-sm">
+          {([{icon:"▣",title:"Produção",sub:"Ao Vivo"},{icon:"◇",title:"Mixagem",sub:"de Fontes"},{icon:"☷",title:"Controle e",sub:"Automação"},{icon:"◉",title:"Transmissão",sub:"Streaming"},{icon:"● REC",title:"Gravação em",sub:"Alta Qualidade"}] as const).map(item => <div key={item.title} className="px-1"><div className="mb-2 text-xl text-[#31ff27] drop-shadow-[0_0_8px_#00ff00] sm:text-3xl">{item.icon}</div><div>{item.title}</div><div>{item.sub}</div></div>)}
+        </div>
+        <p className="mb-5 mt-14 text-lg font-medium sm:text-2xl">Iniciando o wMix...</p>
+        <div role="progressbar" aria-label="Progresso de abertura" aria-valuemin={0} aria-valuemax={100} aria-valuenow={splashProgress} className="h-7 w-full max-w-xl overflow-hidden rounded-full border-2 border-slate-300 bg-[#181818] p-[3px] shadow-[0_0_16px_#17ff00]/20">
+          <div className="h-full rounded-full bg-[#25fa08] shadow-[0_0_12px_#21ff00] transition-[width] duration-75 ease-linear" style={{width: `${splashProgress}%`}} />
+        </div>
+        <p className="mt-4 text-sm text-slate-300">v1.0.0</p>
+        <button type="button" onClick={() => setSplashVisible(false)} className="mt-5 text-xs text-slate-500 hover:text-white">Pular introdução</button>
       </div>
+      <p className="absolute bottom-7 right-8 text-xs italic text-slate-400">Powered by <strong>Ton Dantas</strong></p>
     </div>}
     <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={async () => { setShowInputPicker(true); }} nativeRemove={id => engine.remove(id)} nativeRename={(id, name) => engine.renameSource(id, name)} nativeRecord={toggleRecording} nativeRecording={recording} />
     <input ref={videoFile} type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" className="hidden" aria-label="Selecionar arquivo de vídeo" onChange={e => void addVideoFile(e.target.files?.[0])} />
