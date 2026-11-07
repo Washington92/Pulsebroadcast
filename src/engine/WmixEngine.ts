@@ -32,6 +32,8 @@ export class WmixEngine {
   onProgramChanged?: (id: string | null) => void;
   list() { return [...this.sources.values()]; }
   currentProgram() { return this.program; }
+  isTransitioning() { return this.fadeSnapshot !== null; }
+  currentPreviewScene() { return this.previewScene ? { ...this.previewScene, layout: { ...this.previewScene.layout } } : null; }
   currentOverlay() { return this.overlay; }
   currentPipLayout(): PipLayout { return { ...this.pipLayout }; }
   setPipLayout(layout: PipLayout) {
