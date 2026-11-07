@@ -11,6 +11,7 @@ export class WmixEngine {
   private fadeDuration = 0;
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
+  private recordingError: Error | null = null;
   onSourcesChanged?: () => void;
   onProgramChanged?: (id: string | null) => void;
   list() { return [...this.sources.values()]; }
@@ -85,23 +86,52 @@ export class WmixEngine {
   };
   startRecording(audioStream?: MediaStream | null) {
     if (!this.canvas) throw new Error('Program indisponível');
-    if (this.recorder?.state === 'recording') throw new Error('Gravação já iniciada');
+    if (this.recorder && this.recorder.state !== 'inactive') throw new Error('Gravação já iniciada');
+    if (typeof MediaRecorder === 'undefined') throw new Error('MediaRecorder não suportado neste ambiente');
     const stream = this.canvas.captureStream(30);
-    if (audioStream) audioStream.getAudioTracks().forEach(track => stream.addTrack(track));
-    const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(type => MediaRecorder.isTypeSupported(type));
-    if (!mimeType) { stream.getTracks().forEach(t => t.stop()); throw new Error('Gravação WebM não suportada'); }
+    const audioTracks = audioStream?.getAudioTracks() ?? [];
+    for (const track of audioTracks) stream.addTrack(track);
+    const codecs = audioTracks.length
+      ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+      : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const mimeType = codecs.find(type => MediaRecorder.isTypeSupported(type));
+    if (!mimeType) {
+      stream.getVideoTracks().forEach(track => track.stop());
+      throw new Error('Gravação WebM não suportada');
+    }
     this.chunks = [];
-    const recorder = new MediaRecorder(stream, { mimeType });
-    recorder.ondataavailable = event => { if (event.data.size) this.chunks.push(event.data); };
-    recorder.start(1000); this.recorder = recorder;
+    this.recordingError = null;
+    try {
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recorder.ondataavailable = event => { if (event.data.size) this.chunks.push(event.data); };
+      recorder.onerror = () => { this.recordingError = new Error('Falha na gravação'); };
+      recorder.start(1000);
+      this.recorder = recorder;
+    } catch (error) {
+      stream.getVideoTracks().forEach(track => track.stop());
+      throw error;
+    }
   }
   stopRecording(): Promise<Blob> {
     const recorder = this.recorder;
-    if (!recorder || recorder.state !== 'recording') return Promise.reject(new Error('Nenhuma gravação ativa'));
+    if (!recorder) return Promise.reject(new Error('Nenhuma gravação ativa'));
     return new Promise((resolve, reject) => {
-      recorder.onstop = () => { recorder.stream.getVideoTracks().forEach(t => t.stop()); this.recorder = null; resolve(new Blob(this.chunks, { type: recorder.mimeType })); this.chunks = []; };
-      recorder.onerror = () => reject(new Error('Falha na gravação'));
-      recorder.stop();
+      recorder.onstop = () => {
+        recorder.stream.getVideoTracks().forEach(track => track.stop());
+        this.recorder = null;
+        const error = this.recordingError;
+        const blob = new Blob(this.chunks, { type: recorder.mimeType });
+        this.chunks = [];
+        this.recordingError = null;
+        if (error) reject(error);
+        else if (!blob.size) reject(new Error('Gravação vazia'));
+        else resolve(blob);
+      };
+      if (recorder.state === 'inactive') {
+        recorder.onstop?.(new Event('stop'));
+      } else {
+        try { recorder.requestData(); recorder.stop(); } catch (error) { reject(error); }
+      }
     });
   }
   dispose() {
