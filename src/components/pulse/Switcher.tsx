@@ -395,7 +395,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
           <div className="text-center font-mono text-lg font-bold tabular-nums tracking-wider">{clock}</div>
           <div className="flex justify-between font-mono text-[9px]">
             <span className="text-muted-foreground">{fmtElapsed(elapsed)}</span>
-            <span className="text-warn">silêncio</span>
+            <span className="text-muted-foreground" title="Estado de transmissão e gravação">{recording ? "REC ativo" : streaming ? "LIVE ativo" : "Em espera"}</span>
           </div>
           <div className="flex gap-1">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
