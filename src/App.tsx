@@ -7,10 +7,12 @@ export default function App() {
   const [showObs, setShowObs] = useState(false);
   const [obs, setObs] = useState<ObsClient | null>(null);
   const [scenes, setScenes] = useState<string[]>([]);
+  const [recording, setRecording] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [monitor, setMonitor] = useState<ObsMonitorState>({ connected: false, studio: false, preview: "", program: "" });
   const onClientChange = useCallback((client: ObsClient | null) => {
     setObs(client);
-    if (!client) { setScenes([]); return; }
+    if (!client) { setScenes([]); setRecording(false); setStreaming(false); return; }
     void client.scenes().then(list => setScenes(list.map(s => s.sceneName))).catch(() => setScenes([]));
   }, []);
   useEffect(() => {
@@ -18,14 +20,29 @@ export default function App() {
     let active = true;
     const refresh = async () => {
       try {
-        const list = await obs.scenes();
-        if (active) setScenes(list.map(scene => scene.sceneName));
+        const [list, record, stream] = await Promise.all([obs.scenes(), obs.getRecordStatus(), obs.getStreamStatus()]);
+        if (active) { setScenes(list.map(scene => scene.sceneName)); setRecording(record.outputActive); setStreaming(stream.outputActive); }
       } catch { /* OBS connection state is handled by ObsPanel. */ }
     };
     const timer = setInterval(() => { void refresh(); }, 5000);
     return () => { active = false; clearInterval(timer); };
   }, [obs]);
   const onMonitorChange = useCallback((state: ObsMonitorState) => setMonitor(state), []);
+  const toggleRecording = useCallback(async () => {
+    if (!obs) throw new Error("OBS desconectado");
+    const current = await obs.getRecordStatus();
+    if (current.outputActive) await obs.stopRecord(); else await obs.startRecord();
+    const updated = await obs.getRecordStatus();
+    setRecording(updated.outputActive);
+  }, [obs]);
+  const toggleStreaming = useCallback(async () => {
+    if (!obs) throw new Error("OBS desconectado");
+    const current = await obs.getStreamStatus();
+    if (!current.outputActive && !window.confirm("Iniciar transmissão para o destino configurado no OBS Studio?")) return;
+    if (current.outputActive) await obs.stopStream(); else await obs.startStream();
+    const updated = await obs.getStreamStatus();
+    setStreaming(updated.outputActive);
+  }, [obs]);
   const prepare = useCallback(async (scene: string) => {
     if (!obs) throw new Error("Conecte o OBS primeiro.");
     if (!monitor.studio) return; // Studio disabled: selecting a tile only selects it locally.
@@ -53,7 +70,7 @@ export default function App() {
   }, [obs, monitor.studio]);
   return (
     <>
-      <Switcher obsConnected={!!obs && monitor.connected} obsScenes={scenes} obsTake={take} obsPrepare={prepare} obsProgram={monitor.program} obsPreview={monitor.preview} />
+      <Switcher obsConnected={!!obs && monitor.connected} obsScenes={scenes} obsTake={take} obsPrepare={prepare} obsProgram={monitor.program} obsPreview={monitor.preview} obsRecording={recording} obsStreaming={streaming} obsToggleRecording={toggleRecording} obsToggleStreaming={toggleStreaming} />
       <div className="wmix-demo-note" role="status">{monitor.connected ? "OBS conectado • CUT/AUTO e seleção de cenas integrados • Vídeo e mixer ainda demonstrativos" : "Switcher em demonstração • Conecte o OBS para controlar cenas reais"}</div>
       {!showObs && <button className="wmix-obs-toggle" onClick={() => setShowObs(true)} aria-expanded={false}>{monitor.connected ? "OBS conectado • Configurar" : "Conectar / controlar OBS"}</button>}
       <aside className="wmix-obs-drawer" aria-label="Painel de controle OBS" style={{ display: showObs ? "block" : "none" }}>
