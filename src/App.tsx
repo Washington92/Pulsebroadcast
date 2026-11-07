@@ -56,6 +56,8 @@ export default function App() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const projectFile = useRef<HTMLInputElement>(null);
   const imageFile = useRef<HTMLInputElement>(null);
+  const videoFile = useRef<HTMLInputElement>(null);
+  const [selectedVideo, setSelectedVideo] = useState("");
   const [showInputPicker, setShowInputPicker] = useState(false);
   const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
@@ -196,6 +198,18 @@ export default function App() {
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { if (imageFile.current) imageFile.current.value = ""; }
   }
+  async function addVideoFile(file?: File) {
+    if (!file) return;
+    setShowInputPicker(false);
+    setError("");
+    try { const id = await engine.addVideoFile(file); setSelectedVideo(id); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (videoFile.current) videoFile.current.value = ""; }
+  }
+  function videoAction(action: "play" | "pause" | "restart" | "loop") {
+    try { engine.controlVideo(selectedVideo, action); setError(""); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
   async function addScreen() {
     setError("");
     try { await engine.addScreen(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -236,6 +250,7 @@ export default function App() {
   }
   return <>
     <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={async () => { setShowInputPicker(true); }} nativeRemove={id => engine.remove(id)} nativeRename={(id, name) => engine.renameSource(id, name)} nativeRecord={toggleRecording} nativeRecording={recording} />
+    <input ref={videoFile} type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" className="hidden" aria-label="Selecionar arquivo de vídeo" onChange={e => void addVideoFile(e.target.files?.[0])} />
     <input ref={imageFile} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" className="hidden" aria-label="Selecionar imagem para input" onChange={e => void addImage(e.target.files?.[0])} />
     {showInputPicker && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setShowInputPicker(false); }}>
       <section role="dialog" aria-modal="true" aria-label="Adicionar input" className="w-full max-w-md rounded-xl border border-border bg-card p-5 text-foreground shadow-2xl">
@@ -245,7 +260,7 @@ export default function App() {
           <button type="button" onClick={() => imageFile.current?.click()} className="rounded-lg border border-border bg-secondary/60 p-4 text-left hover:border-primary"><span className="block text-xl">▧</span><strong className="text-sm">Imagem</strong><span className="block text-xs text-muted-foreground">PNG, JPG, WebP e mais</span></button>
           <button type="button" onClick={() => { setShowInputPicker(false); void addScreen(); }} className="rounded-lg border border-border bg-secondary/60 p-4 text-left hover:border-primary"><span className="block text-xl">▣</span><strong className="text-sm">Tela ou janela</strong><span className="block text-xs text-muted-foreground">Capturar monitor ou aplicativo</span></button>
           <button type="button" onClick={() => { setShowInputPicker(false); void addCamera(); }} className="rounded-lg border border-border bg-secondary/60 p-4 text-left hover:border-primary"><span className="block text-xl">◉</span><strong className="text-sm">Câmera</strong><span className="block text-xs text-muted-foreground">Webcam, USB ou HDMI</span></button>
-          <div className="rounded-lg border border-dashed border-border p-4 text-left opacity-60"><span className="block text-xl">▶</span><strong className="text-sm">Vídeo (arquivo)</strong><span className="block text-xs text-muted-foreground">Em desenvolvimento</span></div>
+          <button type="button" onClick={() => videoFile.current?.click()} className="rounded-lg border border-border bg-secondary/60 p-4 text-left hover:border-primary"><span className="block text-xl">▶</span><strong className="text-sm">Vídeo (arquivo)</strong><span className="block text-xs text-muted-foreground">MP4, WebM e outros</span></button>
         </div>
       </section>
     </div>}
@@ -254,6 +269,7 @@ export default function App() {
     {stagedScene && <div className="fixed right-3 top-16 z-[115] w-72 max-w-[90vw] rounded-lg border border-primary bg-card p-2 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground"><span>PREVIEW • {stagedScene.name}</span><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Fechar preview">✕</button></div><select aria-label="Câmera principal do Preview" value={stagedBase ?? ""} onChange={e => setStagedBase(e.target.value || null)} className="mb-2 w-full rounded border border-border bg-card p-1 text-xs text-foreground"><option value="">Escolha a câmera principal</option>{sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select><ScenePreview engine={engine} scene={stagedScene} sources={sources} baseId={stagedBase} /><p className="mt-1 text-[10px] text-muted-foreground">Prévia visual: câmera atual e PiP preparado. O Program permanece inalterado até TAKE.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => takeScene("cut")} className="flex-1 rounded bg-primary px-2 py-2 text-xs font-bold text-primary-foreground">CUT cena</button><button type="button" onClick={() => takeScene("fade")} className="flex-1 rounded bg-secondary px-2 py-2 text-xs font-bold text-foreground">FADE 500ms</button></div></div>}
     <div className="fixed bottom-12 right-3 z-[120] flex flex-wrap gap-2">
       <button type="button" onClick={reconnectProgramCamera} disabled={!program || sources.find(source => source.id === program)?.kind !== "camera"} title="Reabrir a câmera atual mantendo a cena" className="rounded border border-border bg-card px-2 py-2 text-xs text-foreground disabled:opacity-50">Reconectar Program</button>
+      {sources.some(source => source.kind === "video") && <div className="flex items-center gap-1 rounded border border-border bg-card px-1 text-xs text-foreground"><select aria-label="Vídeo para controlar" value={selectedVideo} onChange={e => setSelectedVideo(e.target.value)} className="max-w-32 bg-card p-1 text-xs"><option value="">Selecionar vídeo</option>{sources.filter(source => source.kind === "video").map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select><button type="button" title="Reproduzir vídeo" onClick={() => videoAction("play")} className="rounded bg-secondary px-2 py-1">▶</button><button type="button" title="Pausar vídeo" onClick={() => videoAction("pause")} className="rounded bg-secondary px-2 py-1">Ⅱ</button><button type="button" title="Reiniciar vídeo" onClick={() => videoAction("restart")} className="rounded bg-secondary px-2 py-1">↺</button><button type="button" title="Alternar repetição" onClick={() => videoAction("loop")} className="rounded bg-secondary px-2 py-1">Loop</button></div>}
       <select aria-label="Câmera para adicionar" title="Escolha a webcam antes de clicar em Adicionar câmera" value={selectedCamera} onChange={e => setSelectedCamera(e.target.value)} className="max-w-44 rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="">Câmera padrão</option>{cameras.map((device, index) => <option key={device.deviceId || index} value={device.deviceId}>{device.label || `Câmera ${index + 1}`}</option>)}</select>
       <select aria-label="Fonte de sobreposição PiP" title="Segunda câmera sobre o Program" value={overlay} onChange={e => { engine.setOverlay(e.target.value || null); setOverlay(e.target.value); }} className="max-w-40 rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="">PiP: desligado</option>{sources.filter(source => source.id !== program).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select>
       {overlay && <div className="flex items-center gap-2 rounded border border-border bg-card px-2 text-xs text-foreground">{(["x", "y", "width"] as const).map(key => <label key={key} className="flex items-center gap-1">{key === "width" ? "Tamanho" : key.toUpperCase()}<input type="range" aria-label={`PiP ${key}`} min="0" max={key === "width" ? "80" : "90"} value={Math.round(pipLayout[key] * 100)} onChange={e => updatePipLayout({ ...pipLayout, [key]: Number(e.target.value) / 100 })} className="w-16 accent-primary" /></label>)}</div>}
