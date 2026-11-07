@@ -17,6 +17,11 @@ export class WmixEngine {
   private droppedFrames = 0;
   private lastFrameAt = 0;
   private measuredFps = 0;
+  private targetFps = 30;
+  private lastRenderAt = 0;
+  private renderContext: CanvasRenderingContext2D | null = null;
+  setTargetFps(fps: 24 | 25 | 30 | 50 | 60) { this.targetFps = fps; this.lastRenderAt = 0; }
+  getTargetFps() { return this.targetFps; }
   onPerformance?: (metrics: { fps: number; droppedFrames: number }) => void;
   private program: string | null = null;
   private overlay: string | null = null;
@@ -68,6 +73,11 @@ export class WmixEngine {
   attach(canvas: HTMLCanvasElement) {
     cancelAnimationFrame(this.frame);
     this.canvas = canvas;
+    this.renderContext = canvas.getContext("2d", { alpha: false });
+    this.lastRenderAt = 0;
+    this.frameWindowStart = 0;
+    this.frameCount = 0;
+    this.lastFrameAt = 0;
     this.draw();
   }
   attachPreview(canvas: HTMLCanvasElement | null) { this.previewCanvas = canvas; }
@@ -364,11 +374,19 @@ export class WmixEngine {
     }
     this.onSourcesChanged?.();
   }
-  private draw = () => {
-    const now = performance.now();
-    if (!this.frameWindowStart) this.frameWindowStart = now;
-    if (this.lastFrameAt && now - this.lastFrameAt > 50) this.droppedFrames += Math.max(0, Math.floor((now - this.lastFrameAt) / (1000 / 30)) - 1);
+  private draw = (now: number = performance.now()) => {
+    if (!this.canvas) return;
+    // Schedule the next frame first; rendering is throttled independently of monitor refresh rate.
+    this.frame = requestAnimationFrame(this.draw);
+    const frameInterval = 1000 / this.targetFps;
+    if (this.lastRenderAt && now - this.lastRenderAt < frameInterval - 1) return;
+    if (this.lastFrameAt) {
+      const delta = now - this.lastFrameAt;
+      if (delta > frameInterval * 1.5) this.droppedFrames += Math.max(0, Math.round(delta / frameInterval) - 1);
+    }
     this.lastFrameAt = now;
+    this.lastRenderAt = now - ((now - (this.lastRenderAt || now)) % frameInterval);
+    if (!this.frameWindowStart) this.frameWindowStart = now;
     this.frameCount++;
     if (now - this.frameWindowStart >= 1000) {
       this.measuredFps = Math.round(this.frameCount * 1000 / (now - this.frameWindowStart));
@@ -377,8 +395,7 @@ export class WmixEngine {
       this.frameWindowStart = now;
     }
     const canvas = this.canvas;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = this.renderContext;
     if (ctx) {
       ctx.fillStyle = '#080c13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
       this.paintBase(ctx, canvas, this.program);
@@ -407,13 +424,12 @@ export class WmixEngine {
       }
     }
     this.drawPreview();
-    this.frame = requestAnimationFrame(this.draw);
   };
   startRecording(audioStream?: MediaStream | null) {
     if (!this.canvas) throw new Error('Program indisponível');
     if (this.recorder) throw new Error('Finalize a gravação anterior antes de iniciar outra');
     if (typeof MediaRecorder === 'undefined') throw new Error('MediaRecorder não suportado neste ambiente');
-    const stream = this.canvas.captureStream(30);
+    const stream = this.canvas.captureStream(this.targetFps);
     const audioTracks = audioStream?.getAudioTracks() ?? [];
     for (const track of audioTracks) stream.addTrack(track);
     const codecs = audioTracks.length
@@ -478,7 +494,7 @@ export class WmixEngine {
     });
   }
   dispose() {
-    cancelAnimationFrame(this.frame); this.canvas = null; this.clearPreview();
+    cancelAnimationFrame(this.frame); this.canvas = null; this.renderContext = null; this.clearPreview();
     this.onPerformance = undefined;
     this.onRecordingRecovered = undefined;
     this.onRecordingStopped = undefined;
