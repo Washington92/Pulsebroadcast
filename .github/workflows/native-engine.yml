@@ -4,6 +4,7 @@ on:
     branches: [develop]
     paths:
       - 'src-tauri/src/**'
+      - 'tests/synthetic_encoder_smoke.py'
       - 'src-tauri/Cargo.toml'
       - '.github/workflows/native-engine.yml'
   pull_request:
@@ -38,5 +39,9 @@ jobs:
           target.parent.mkdir(parents=True, exist_ok=True)
           target.write_bytes(png)
           PY
+      - name: Install FFmpeg for synthetic encoder test
+        run: sudo apt-get install -y ffmpeg
+      - name: Validate synthetic H264/AAC encoding and FLV output
+        run: python3 tests/synthetic_encoder_smoke.py
       - name: Check Tauri backend
         run: cargo check --manifest-path src-tauri/Cargo.toml
