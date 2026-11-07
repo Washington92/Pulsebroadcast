@@ -40,6 +40,11 @@ export default function App() {
     audio.onChange = setInputs;
     audio.setMaster(0.78, false);
     engine.onProgramChanged = setProgram;
+    engine.onRecordingStopped = failure => {
+      setRecording(false);
+      if (failure) setError(failure.message);
+      else setError(previous => previous === "Gravação interrompida inesperadamente." ? "" : previous);
+    };
     if (canvas.current) engine.attach(canvas.current);
     return () => { engine.dispose(); audio.dispose(); };
   }, [engine, audio]);
