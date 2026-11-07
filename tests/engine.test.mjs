@@ -223,3 +223,31 @@ test("SceneGraph clears removed overlay but preserves other scene references", a
   assert.equal(engine.currentPreviewScene().overlay, null);
   engine.dispose();
 });
+
+test("Program capture uses the composited Canvas at configured FPS", async () => {
+  const { engine } = harness();
+  assert.throws(() => engine.captureProgramVideo(), /Program indisponível/);
+  const captureCalls = [];
+  const videoTrack = { kind: "video", stop() {} };
+  const canvas = {
+    width: 1280, height: 720,
+    getContext: () => ({ fillRect() {}, drawImage() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, set fillStyle(_) {}, set globalAlpha(_) {} }),
+    captureStream(fps) {
+      captureCalls.push(fps);
+      return { getVideoTracks: () => [videoTrack], getTracks: () => [videoTrack] };
+    },
+  };
+  engine.attach(canvas);
+  engine.setTargetFps(25);
+  const stream = engine.captureProgramVideo();
+  assert.equal(stream.getVideoTracks()[0], videoTrack);
+  assert.deepEqual(captureCalls, [25]);
+  engine.dispose();
+});
+
+test("Program capture rejects unsupported Canvas capture without starting output", () => {
+  const { engine, canvas } = harness();
+  engine.attach(canvas());
+  assert.throws(() => engine.captureProgramVideo(), /não suportada/);
+  engine.dispose();
+});
