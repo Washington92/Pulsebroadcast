@@ -224,6 +224,7 @@ export class WmixEngine {
     }
     this.chunks = [];
     this.recordingError = null;
+    this.recordingStopRequested = false;
     try {
       const recorder = new MediaRecorder(stream, { mimeType });
       recorder.ondataavailable = event => { if (event.data.size) this.chunks.push(event.data); };
@@ -246,7 +247,10 @@ export class WmixEngine {
     const blob = new Blob(this.chunks, { type: recorder.mimeType });
     this.chunks = [];
     this.recordingError = null;
-    const failure = error ?? (!blob.size ? new Error("Gravação vazia") : null);
+    const unexpected = !this.recordingStopRequested;
+    this.recordingStopRequested = false;
+    const failure = error ?? (!blob.size ? new Error("Gravação vazia") : unexpected ? new Error("Gravação interrompida inesperadamente; arquivo parcial recuperado.") : null);
+    if (unexpected && blob.size) this.onRecordingRecovered?.(blob);
     const waiters = this.recordingWaiters.splice(0);
     for (const waiter of waiters) {
       if (failure) waiter.reject(failure);
@@ -259,6 +263,7 @@ export class WmixEngine {
     if (!recorder) return Promise.reject(new Error("Nenhuma gravação ativa"));
     return new Promise((resolve, reject) => {
       this.recordingWaiters.push({ resolve, reject });
+      this.recordingStopRequested = true;
       if (recorder.state === "inactive") {
         this.finishRecording(recorder);
       } else {
@@ -273,6 +278,8 @@ export class WmixEngine {
   dispose() {
     cancelAnimationFrame(this.frame); this.canvas = null; this.clearPreview();
     this.onPerformance = undefined;
+    this.onRecordingRecovered = undefined;
+    this.onRecordingStopped = undefined;
     if (this.recorder && this.recorder.state !== "inactive") this.recorder.stop();
     this.recordingStream?.getVideoTracks().forEach(track => track.stop());
     this.recordingStream = null;
