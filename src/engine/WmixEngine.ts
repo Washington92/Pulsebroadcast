@@ -1,5 +1,5 @@
 /** wMix Engine 0.1 — browser capture/composition; no OBS dependency. */
-export type WmixSource = { id: string; name: string; stream: MediaStream; kind: "camera" | "screen" | "image"; offline?: boolean };
+export type WmixSource = { id: string; name: string; stream: MediaStream; kind: "camera" | "screen" | "image" | "video"; offline?: boolean };
 export type PipLayout = { x: number; y: number; width: number };
 export class WmixEngine {
   private sources = new Map<string, WmixSource>();
@@ -7,6 +7,7 @@ export class WmixEngine {
   private recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private recoveryAttempts = new Map<string, number>();
   private cameraDeviceIds = new Map<string, string>();
+  private mediaPlayers = new Map<string, { player: HTMLVideoElement; url: string; frame: number; canvas: HTMLCanvasElement }>();
   private canvas: HTMLCanvasElement | null = null;
   private previewCanvas: HTMLCanvasElement | null = null;
   private previewScene: { base: string | null; overlay: string | null; layout: PipLayout } | null = null;
@@ -175,7 +176,59 @@ export class WmixEngine {
       return id;
     } finally { bitmap.close(); }
   }
-  private addStream(stream: MediaStream, label: string, kind: 'camera' | 'screen' | 'image') {
+  /** Video file source with an independent playback clock and native canvas capture. */
+  async addVideoFile(file: File) {
+    if (!file.type.startsWith("video/")) throw new Error("Selecione um arquivo de vídeo válido.");
+    const url = URL.createObjectURL(file);
+    const player = document.createElement("video");
+    player.src = url;
+    player.loop = true;
+    player.muted = true;
+    player.playsInline = true;
+    player.preload = "auto";
+    try {
+      await new Promise<void>((resolve, reject) => {
+        player.onloadedmetadata = () => resolve();
+        player.onerror = () => reject(new Error("Não foi possível abrir o vídeo. Verifique o formato e codec."));
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = player.videoWidth || 1280;
+      canvas.height = player.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas indisponível para reprodução.");
+      const stream = canvas.captureStream(30);
+      const id = this.addStream(stream, file.name.replace(/\\.[^.]+$/, ""), "video");
+      const entry = { player, url, frame: 0, canvas };
+      this.mediaPlayers.set(id, entry);
+      const paint = () => {
+        if (this.mediaPlayers.get(id) !== entry) return;
+        if (player.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          ctx.drawImage(player, 0, 0, canvas.width, canvas.height);
+          (stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void })?.requestFrame?.();
+        }
+        entry.frame = requestAnimationFrame(paint);
+      };
+      paint();
+      void player.play().catch(() => {});
+      return id;
+    } catch (error) {
+      player.pause();
+      player.removeAttribute("src");
+      player.load();
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+  }
+  controlVideo(id: string, action: "play" | "pause" | "restart" | "loop") {
+    const entry = this.mediaPlayers.get(id);
+    if (!entry) throw new Error("Selecione um input de vídeo.");
+    if (action === "pause") entry.player.pause();
+    else if (action === "restart") { entry.player.currentTime = 0; void entry.player.play().catch(() => {}); }
+    else if (action === "loop") entry.player.loop = !entry.player.loop;
+    else void entry.player.play().catch(() => {});
+    return { paused: entry.player.paused, loop: entry.player.loop };
+  }
+  private addStream(stream: MediaStream, label: string, kind: 'camera' | 'screen' | 'image' | 'video') {
     const id = crypto.randomUUID();
     const name = stream.getVideoTracks()[0]?.label || label;
     const video = document.createElement('video');
@@ -247,6 +300,8 @@ export class WmixEngine {
     this.recoveryTimers.delete(id);
     this.recoveryAttempts.delete(id);
     this.cameraDeviceIds.delete(id);
+    const media = this.mediaPlayers.get(id);
+    if (media) { cancelAnimationFrame(media.frame); media.player.pause(); media.player.removeAttribute("src"); media.player.load(); URL.revokeObjectURL(media.url); this.mediaPlayers.delete(id); }
     const video = this.videos.get(id);
     if (video) { video.pause(); video.srcObject = null; }
     this.videos.delete(id);
