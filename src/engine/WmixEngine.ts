@@ -15,6 +15,7 @@ export class WmixEngine {
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private recordingError: Error | null = null;
+  private recordingStream: MediaStream | null = null;
   onSourcesChanged?: () => void;
   onProgramChanged?: (id: string | null) => void;
   list() { return [...this.sources.values()]; }
@@ -132,7 +133,7 @@ export class WmixEngine {
   };
   startRecording(audioStream?: MediaStream | null) {
     if (!this.canvas) throw new Error('Program indisponível');
-    if (this.recorder && this.recorder.state !== 'inactive') throw new Error('Gravação já iniciada');
+    if (this.recorder) throw new Error('Finalize a gravação anterior antes de iniciar outra');
     if (typeof MediaRecorder === 'undefined') throw new Error('MediaRecorder não suportado neste ambiente');
     const stream = this.canvas.captureStream(30);
     const audioTracks = audioStream?.getAudioTracks() ?? [];
@@ -153,6 +154,7 @@ export class WmixEngine {
       recorder.onerror = () => { this.recordingError = new Error('Falha na gravação'); };
       recorder.start(1000);
       this.recorder = recorder;
+      this.recordingStream = stream;
     } catch (error) {
       stream.getVideoTracks().forEach(track => track.stop());
       throw error;
@@ -163,7 +165,8 @@ export class WmixEngine {
     if (!recorder) return Promise.reject(new Error('Nenhuma gravação ativa'));
     return new Promise((resolve, reject) => {
       recorder.onstop = () => {
-        recorder.stream.getVideoTracks().forEach(track => track.stop());
+        this.recordingStream?.getVideoTracks().forEach(track => track.stop());
+        this.recordingStream = null;
         this.recorder = null;
         const error = this.recordingError;
         const blob = new Blob(this.chunks, { type: recorder.mimeType });
@@ -182,7 +185,9 @@ export class WmixEngine {
   }
   dispose() {
     cancelAnimationFrame(this.frame); this.canvas = null;
-    if (this.recorder?.state === 'recording') this.recorder.stop();
+    if (this.recorder && this.recorder.state !== "inactive") this.recorder.stop();
+    this.recordingStream?.getVideoTracks().forEach(track => track.stop());
+    this.recordingStream = null;
     for (const id of [...this.sources.keys()]) this.remove(id);
   }
 }
