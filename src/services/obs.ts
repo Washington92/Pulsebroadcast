@@ -49,6 +49,15 @@ export class ObsClient {
   }
   async scenes():Promise<ObsScene[]>{const data=await this.request<{scenes:ObsScene[]}>("GetSceneList");return data.scenes;}
   async setProgram(sceneName:string){await this.request("SetCurrentProgramScene",{sceneName});}
+  async getStreamStatus(){return this.request<{outputActive:boolean;outputTimecode:string;outputDuration:number;outputBytes:number;outputSkippedFrames:number;outputTotalFrames:number}>("GetStreamStatus");}
+  async getRecordStatus(){return this.request<{outputActive:boolean;outputPaused:boolean;outputTimecode:string}>("GetRecordStatus");}
+  async startRecord(){await this.request("StartRecord");}
+  async stopRecord(){await this.request("StopRecord");}
+  async getStudioModeEnabled(){return this.request<{studioModeEnabled:boolean}>("GetStudioModeEnabled");}
+  async setStudioModeEnabled(studioModeEnabled:boolean){await this.request("SetStudioModeEnabled",{studioModeEnabled});}
+  async getCurrentPreviewScene(){return this.request<{currentPreviewSceneName:string}>("GetCurrentPreviewScene");}
+  async setCurrentPreviewScene(sceneName:string){await this.request("SetCurrentPreviewScene",{sceneName});}
+  async triggerStudioTransition(){await this.request("TriggerStudioModeTransition");}
   async startStream(){await this.request("StartStream");}
   async stopStream(){await this.request("StopStream");}
   disconnect(){this.socket?.close();this.socket=null;this.update("disconnected");}
