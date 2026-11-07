@@ -16,6 +16,7 @@ export class WmixEngine {
   private chunks: Blob[] = [];
   private recordingError: Error | null = null;
   private recordingStream: MediaStream | null = null;
+  private recordingWaiters: Array<{ resolve: (blob: Blob) => void; reject: (error: Error) => void }> = [];
   onRecordingStopped?: (error: Error | null) => void;
   onSourcesChanged?: () => void;
   onProgramChanged?: (id: string | null) => void;
@@ -152,7 +153,8 @@ export class WmixEngine {
     try {
       const recorder = new MediaRecorder(stream, { mimeType });
       recorder.ondataavailable = event => { if (event.data.size) this.chunks.push(event.data); };
-      recorder.onerror = () => { this.recordingError = new Error('Falha na gravação'); };
+      recorder.onerror = () => { this.recordingError = new Error("Falha na gravação"); };
+      recorder.onstop = () => this.finishRecording(recorder);
       recorder.start(1000);
       this.recorder = recorder;
       this.recordingStream = stream;
@@ -161,26 +163,36 @@ export class WmixEngine {
       throw error;
     }
   }
+  private finishRecording(recorder: MediaRecorder) {
+    if (this.recorder !== recorder) return;
+    this.recordingStream?.getVideoTracks().forEach(track => track.stop());
+    this.recordingStream = null;
+    this.recorder = null;
+    const error = this.recordingError;
+    const blob = new Blob(this.chunks, { type: recorder.mimeType });
+    this.chunks = [];
+    this.recordingError = null;
+    const failure = error ?? (!blob.size ? new Error("Gravação vazia") : null);
+    const waiters = this.recordingWaiters.splice(0);
+    for (const waiter of waiters) {
+      if (failure) waiter.reject(failure);
+      else waiter.resolve(blob);
+    }
+    this.onRecordingStopped?.(failure);
+  }
   stopRecording(): Promise<Blob> {
     const recorder = this.recorder;
-    if (!recorder) return Promise.reject(new Error('Nenhuma gravação ativa'));
+    if (!recorder) return Promise.reject(new Error("Nenhuma gravação ativa"));
     return new Promise((resolve, reject) => {
-      recorder.onstop = () => {
-        this.recordingStream?.getVideoTracks().forEach(track => track.stop());
-        this.recordingStream = null;
-        this.recorder = null;
-        const error = this.recordingError;
-        const blob = new Blob(this.chunks, { type: recorder.mimeType });
-        this.chunks = [];
-        this.recordingError = null;
-        if (error) { this.onRecordingStopped?.(error); reject(error); }
-        else if (!blob.size) { const empty = new Error("Gravação vazia"); this.onRecordingStopped?.(empty); reject(empty); }
-        else { this.onRecordingStopped?.(null); resolve(blob); }
-      };
-      if (recorder.state === 'inactive') {
-        recorder.onstop?.(new Event('stop'));
+      this.recordingWaiters.push({ resolve, reject });
+      if (recorder.state === "inactive") {
+        this.finishRecording(recorder);
       } else {
-        try { recorder.requestData(); recorder.stop(); } catch (error) { reject(error); }
+        try { recorder.requestData(); recorder.stop(); }
+        catch (error) {
+          this.recordingError = error instanceof Error ? error : new Error(String(error));
+          this.finishRecording(recorder);
+        }
       }
     });
   }
