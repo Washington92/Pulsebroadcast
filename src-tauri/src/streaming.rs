@@ -1,4 +1,7 @@
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::Duration;
+use tauri::State;
+use crate::output_manager::{OutputManager, OutputState};
 
 /// Checks for a local FFmpeg executable. This does not start a broadcast.
 #[tauri::command]
@@ -29,6 +32,67 @@ pub fn validate_rtmp_destination(url: String, video_bitrate_kbps: u32) -> Result
         return Err("Bitrate deve ficar entre 500 e 50000 kbps.".into());
     }
     Ok(())
+}
+
+/// Synthetic A/V test only. Restrict destinations to loopback to avoid exposing
+/// production stream keys in operating-system process command lines.
+#[tauri::command]
+pub fn start_synthetic_stream(
+    manager: State<'_, OutputManager>,
+    url: String,
+    video_bitrate_kbps: u32,
+) -> Result<String, String> {
+    validate_rtmp_destination(url.clone(), video_bitrate_kbps)?;
+    let host = url.split_once("://").and_then(|(_, rest)| rest.split('/').next()).unwrap_or("");
+    if !matches!(host, "localhost" | "127.0.0.1" | "127.0.0.1:1935" | "localhost:1935") {
+        return Err("Teste sintético restrito ao servidor RTMP local. Não use chaves reais.".into());
+    }
+    let mut session = manager.0.lock().map_err(|_| "Gerenciador indisponível")?;
+    session.poll()?;
+    session.begin()?;
+    let result = Command::new("ffmpeg")
+        .args([
+            "-hide_banner", "-nostdin", "-loglevel", "error",
+            "-re", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30",
+            "-re", "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000",
+            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            "-b:v", &format!("{video_bitrate_kbps}k"),
+            "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
+            "-f", "flv", &url,
+        ])
+        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
+        .spawn();
+    match result {
+        Ok(child) => {
+            session.attach(child)?;
+            // Live here means the encoder process is running, NOT proof that
+            // the RTMP ingest server accepted the stream.
+            std::thread::sleep(Duration::from_millis(300));
+            match session.poll()? {
+                OutputState::Starting => {
+                    session.mark_live()?;
+                    Ok("Encoder sintético em execução; confirme a recepção no servidor local.".into())
+                }
+                _ => Err("Encoder encerrou durante a inicialização; verifique o servidor RTMP local.".into()),
+            }
+        }
+        Err(_) => {
+            session.fail("FFmpeg não pôde ser iniciado");
+            Err("FFmpeg não encontrado ou indisponível".into())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn synthetic_stream_status(manager: State<'_, OutputManager>) -> Result<String, String> {
+    let mut session = manager.0.lock().map_err(|_| "Gerenciador indisponível")?;
+    Ok(session.poll()?.as_str().to_string())
+}
+
+#[tauri::command]
+pub fn stop_synthetic_stream(manager: State<'_, OutputManager>) -> Result<(), String> {
+    let mut session = manager.0.lock().map_err(|_| "Gerenciador indisponível")?;
+    session.stop()
 }
 
 #[cfg(test)]
