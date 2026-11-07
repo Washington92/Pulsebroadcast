@@ -33,6 +33,8 @@ export default function App() {
   const [audio] = useState(() => new WmixAudioEngine());
   const [inputs, setInputs] = useState<AudioInput[]>([]);
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState("");
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
   const [selectedMicrophone, setSelectedMicrophone] = useState("");
   const [sources, setSources] = useState<WmixSource[]>([]);
@@ -55,6 +57,9 @@ export default function App() {
   const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
     engine.onSourcesChanged = () => { setSources(engine.list()); setOverlay(engine.currentOverlay() ?? ""); };
+    void refreshMicrophones();
+    const refreshDevices = () => { void refreshMicrophones(); };
+    navigator.mediaDevices?.addEventListener?.("devicechange", refreshDevices);
     engine.setPipLayout(pipLayout);
     audio.onChange = setInputs;
     audio.setMaster(0.78, false);
@@ -77,7 +82,7 @@ export default function App() {
       engine.attach(canvas.current);
       if (typeof canvas.current.captureStream === "function") setProgramStream(canvas.current.captureStream(30));
     }
-    return () => { engine.onPerformance = undefined; engine.dispose(); audio.dispose(); };
+    return () => { navigator.mediaDevices?.removeEventListener?.("devicechange", refreshDevices); engine.onPerformance = undefined; engine.dispose(); audio.dispose(); };
   }, [engine, audio]);
   function updatePipLayout(next: PipLayout) {
     engine.setPipLayout(next);
@@ -120,7 +125,7 @@ export default function App() {
   }
   async function addCamera() {
     setError("");
-    try { await engine.addCamera(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try { await engine.addCamera(selectedCamera || undefined); await refreshMicrophones(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
   async function addScreen() {
     setError("");
@@ -130,6 +135,7 @@ export default function App() {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       setMicrophones(devices.filter(device => device.kind === "audioinput"));
+      setCameras(devices.filter(device => device.kind === "videoinput"));
       setOutputs(devices.filter(device => device.kind === "audiooutput"));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -165,6 +171,7 @@ export default function App() {
     <div className="fixed bottom-3 right-3 z-[120] rounded border border-border bg-card/95 px-3 py-1 text-xs font-mono text-foreground shadow" role="status" aria-label="Desempenho de renderização">FPS {performanceMetrics.fps} · Frames estimados perdidos {performanceMetrics.droppedFrames}</div>
     {stagedScene && <div className="fixed right-3 top-16 z-[115] w-72 max-w-[90vw] rounded-lg border border-primary bg-card p-2 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground"><span>PREVIEW • {stagedScene.name}</span><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Fechar preview">✕</button></div><select aria-label="Câmera principal do Preview" value={stagedBase ?? ""} onChange={e => setStagedBase(e.target.value || null)} className="mb-2 w-full rounded border border-border bg-card p-1 text-xs text-foreground"><option value="">Escolha a câmera principal</option>{sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select><ScenePreview engine={engine} scene={stagedScene} sources={sources} baseId={stagedBase} /><p className="mt-1 text-[10px] text-muted-foreground">Prévia visual: câmera atual e PiP preparado. O Program permanece inalterado até TAKE.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => takeScene("cut")} className="flex-1 rounded bg-primary px-2 py-2 text-xs font-bold text-primary-foreground">CUT cena</button><button type="button" onClick={() => takeScene("fade")} className="flex-1 rounded bg-secondary px-2 py-2 text-xs font-bold text-foreground">FADE 500ms</button></div></div>}
     <div className="fixed bottom-12 right-3 z-[120] flex flex-wrap gap-2">
+      <select aria-label="Câmera para adicionar" title="Escolha a webcam antes de clicar em Adicionar câmera" value={selectedCamera} onChange={e => setSelectedCamera(e.target.value)} className="max-w-44 rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="">Câmera padrão</option>{cameras.map((device, index) => <option key={device.deviceId || index} value={device.deviceId}>{device.label || `Câmera ${index + 1}`}</option>)}</select>
       <select aria-label="Fonte de sobreposição PiP" title="Segunda câmera sobre o Program" value={overlay} onChange={e => { engine.setOverlay(e.target.value || null); setOverlay(e.target.value); }} className="max-w-40 rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="">PiP: desligado</option>{sources.filter(source => source.id !== program).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select>
       {overlay && <div className="flex items-center gap-2 rounded border border-border bg-card px-2 text-xs text-foreground">{(["x", "y", "width"] as const).map(key => <label key={key} className="flex items-center gap-1">{key === "width" ? "Tamanho" : key.toUpperCase()}<input type="range" aria-label={`PiP ${key}`} min="0" max={key === "width" ? "80" : "90"} value={Math.round(pipLayout[key] * 100)} onChange={e => updatePipLayout({ ...pipLayout, [key]: Number(e.target.value) / 100 })} className="w-16 accent-primary" /></label>)}</div>}
       <div className="flex items-center gap-1 rounded border border-border bg-card px-1"><input aria-label="Nome da cena" placeholder="Nome da cena" value={presetName} onChange={e => setPresetName(e.target.value)} maxLength={40} className="w-28 bg-card p-1 text-xs text-foreground" /><button type="button" onClick={saveScene} className="rounded bg-secondary px-2 py-1 text-xs text-foreground">Salvar cena</button><select aria-label="Carregar cena salva" value={selectedPreset} onChange={e => loadScene(e.target.value)} className="max-w-32 bg-card p-1 text-xs text-foreground"><option value="">Cenas salvas</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select>{stagedScene && <><span role="status" className="max-w-44 truncate px-1 text-xs text-foreground" title={stagedScene.name}>PREVIEW: {stagedScene.name}</span><button type="button" onClick={() => takeScene("cut")} className="rounded bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">TAKE cena</button><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Cancelar preparação da cena" className="rounded bg-secondary px-2 py-1 text-xs text-foreground">Cancelar</button></>}</div>
