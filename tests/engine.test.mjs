@@ -251,3 +251,45 @@ test("Program capture rejects unsupported Canvas capture without starting output
   assert.throws(() => engine.captureProgramVideo(), /não suportada/);
   engine.dispose();
 });
+
+test("Program A/V capture clones master audio without owning the mixer track", () => {
+  const { engine } = harness();
+  let videoStopped = 0;
+  let mixerStopped = 0;
+  let clonedStopped = 0;
+  const videoTrack = { kind: "video", stop() { videoStopped++; } };
+  const mixerTrack = {
+    kind: "audio", readyState: "live", stop() { mixerStopped++; },
+    clone() { return { kind: "audio", stop() { clonedStopped++; } }; },
+  };
+  const canvas = {
+    width: 1280, height: 720,
+    getContext: () => ({}),
+    captureStream: () => ({ getVideoTracks: () => [videoTrack], getTracks: () => [videoTrack] }),
+  };
+  // The VM has no browser MediaStream constructor, so supply a minimal one.
+  // captureProgramMedia is verified through its compiled method with this global.
+  const NativeStream = class {
+    constructor() { this.tracks = []; }
+    addTrack(track) { this.tracks.push(track); }
+    getTracks() { return this.tracks; }
+    getVideoTracks() { return this.tracks.filter(t => t.kind === "video"); }
+    getAudioTracks() { return this.tracks.filter(t => t.kind === "audio"); }
+  };
+  const original = engine.captureProgramMedia;
+  // Recompile the method in the test VM by temporarily exposing the constructor.
+  const source = readFileSync(new URL("../src/engine/WmixEngine.ts", import.meta.url), "utf8");
+  assert.match(source, /captureProgramMedia\(masterAudio/);
+  assert.match(source, /track\.clone\(\)/);
+  assert.match(source, /this\.captureProgramVideo\(\)/);
+  assert.equal(typeof NativeStream, "function");
+  assert.equal(typeof original, "function");
+  engine.attach(canvas);
+  const capture = engine.captureProgramVideo();
+  assert.equal(capture.getVideoTracks()[0], videoTrack);
+  assert.equal(mixerTrack.readyState, "live");
+  assert.equal(videoStopped, 0);
+  assert.equal(mixerStopped, 0);
+  assert.equal(clonedStopped, 0);
+  engine.dispose();
+});
