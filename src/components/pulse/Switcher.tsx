@@ -337,7 +337,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
       </header>
 
       {/* ===== Upper deck ===== */}
-      <section className="grid shrink-0 grid-cols-[minmax(0,1fr)_200px_minmax(0,1fr)_150px] gap-2">
+      <section className="grid shrink-0 grid-cols-[minmax(0,1fr)_170px_minmax(0,1fr)_150px] gap-2">
         {/* Preview */}
         <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-7 items-center gap-2 px-2 text-xs">
@@ -352,14 +352,14 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         </div>
 
         {/* Center console */}
-        <div className="flex flex-col gap-1.5 rounded-md border border-border bg-card p-2">
-          <div className="text-center font-mono text-2xl font-bold tabular-nums tracking-wider">{clock}</div>
+        <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card p-1.5">
+          <div className="text-center font-mono text-lg font-bold tabular-nums tracking-wider">{clock}</div>
           <div className="flex justify-between font-mono text-[9px]">
             <span className="text-muted-foreground">{fmtElapsed(elapsed)}</span>
             <span className="text-warn">silêncio</span>
           </div>
-          <div className="flex gap-1.5">
-            <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex gap-1">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
               <button onClick={auto} className="rounded bg-primary px-2 py-1 text-left text-primary-foreground hover:brightness-110">
                 <div className="flex justify-between"><span className="text-sm font-bold">AUTO</span><span className="text-[8px]">Enter</span></div>
                 <div className="truncate text-[9px] font-medium">{previewId} {pvw?.name} - {transition} {durations[transition]} s</div>
@@ -382,15 +382,15 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                 ))}
               </div>
             </div>
-            <div className="flex w-8 flex-col items-center">
+            <div className="flex w-7 flex-col items-center">
               <span className="text-[8px] font-bold text-muted-foreground">T-BAR</span>
-              <div className="relative mt-1 h-[120px] w-4 rounded-sm bg-background shadow-inner">
+              <div className="relative mt-1 h-[104px] w-4 rounded-md border border-border bg-background shadow-inner">
                 <div className="absolute inset-x-1/2 inset-y-1 w-px bg-border" />
                 <input type="range" min={0} max={1} step={0.01} value={progress} aria-label="T-Bar"
                   onChange={(e) => onTbar(+e.target.value)}
                   className="vfader absolute inset-0 h-full w-full cursor-grab opacity-0" />
-                <div className="pointer-events-none absolute -left-1.5 h-4 w-7 rounded-sm border border-border bg-gradient-to-b from-foreground to-muted-foreground"
-                  style={{ top: `calc(${progress * 100}% * 0.85)` }} />
+                <div className="pointer-events-none absolute -left-1 h-3.5 w-6 rounded border border-slate-400 bg-gradient-to-b from-slate-100 to-slate-500 shadow-md"
+                  style={{ top: `calc(${progress * 100}% * 0.87)` }} />
               </div>
             </div>
           </div>
