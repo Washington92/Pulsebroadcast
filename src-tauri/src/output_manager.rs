@@ -1,5 +1,5 @@
 //! Native output lifecycle. No UI, canvas or FFmpeg dependency.
-use std::process::{Child, ExitStatus};
+use std::process::Child;
 use std::sync::Mutex;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
