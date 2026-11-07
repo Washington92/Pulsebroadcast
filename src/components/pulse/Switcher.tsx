@@ -162,7 +162,7 @@ function Fader({ value, onChange, level, label }: { value: number; onChange: (n:
 const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
-export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeSources = [], nativeProgram = null, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
+export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [demoSources, setSources] = useState(initialSources);
   const sources: Source[] = nativeSources.length ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [obsError, setObsError] = useState("");
@@ -534,7 +534,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                 <div key={k} className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 rounded border border-border bg-card p-1.5">
                   <span className="text-[10px] font-bold">{label}</span>
                   {(k === "a" || k === "b") && <div className="flex w-full gap-0.5"><button className={cn(btn, "h-5 flex-1 px-0 text-[9px]")}>M</button><button className={cn(btn, "h-5 flex-1 px-0")}><Volume2 className="h-3 w-3" /></button></div>}
-                  <Fader label={label} value={bus[k]} onChange={(v) => { setBus({ ...bus, [k]: v }); if (k === "master") nativeMasterChange?.(v / 100, bus.masterMute); }}
+                  <Fader label={label} value={bus[k]} onChange={(v) => { setBus({ ...bus, [k]: v }); if (k === "master") nativeMasterChange?.(v / 100, bus.masterMute); if (k === "a" || k === "b") nativeBusVolume?.(k, v / 100); }}
                     level={k === "master" && bus.masterMute ? 0 : (levels[k] ?? 0) * (bus[k] / 80)} />
                   <span className="font-mono text-[9px] text-muted-foreground">{toDb(bus[k])} dB</span>
                   {k === "master" && <button onClick={() => { setBus({ ...bus, masterMute: !bus.masterMute }); nativeMasterChange?.(bus.master / 100, !bus.masterMute); }}
@@ -562,6 +562,14 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                   <Fader label={input.name} value={Math.round(input.volume * 100)}
                     onChange={value => nativeAudioVolume?.(input.id, value / 100)} level={input.muted ? 0 : input.level} />
                   <span className="font-mono text-[9px] text-muted-foreground">{toDb(Math.round(input.volume * 100))} dB</span>
+                  <div className="flex w-full gap-1">
+                    {(["a", "b"] as const).map(busKey => <button key={busKey} type="button"
+                      aria-label={`Enviar ${input.name} ao BUS ${busKey.toUpperCase()}`}
+                      onClick={() => nativeBusSend?.(input.id, busKey, !(busKey === "a" ? input.busA : input.busB))}
+                      className={cn(btn, "h-6 flex-1 px-0 font-bold", (busKey === "a" ? input.busA : input.busB) && "border-primary bg-primary text-primary-foreground")}>
+                      {busKey.toUpperCase()}
+                    </button>)}
+                  </div>
                 </div>
               ))}
               {/* Channel strips */}
