@@ -35,7 +35,11 @@ export class WmixEngine {
     this.overlay = id;
     this.onSourcesChanged?.();
   }
-  attach(canvas: HTMLCanvasElement) { this.canvas = canvas; this.draw(); }
+  attach(canvas: HTMLCanvasElement) {
+    cancelAnimationFrame(this.frame);
+    this.canvas = canvas;
+    this.draw();
+  }
   async addCamera(deviceId?: string) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
     return this.addStream(stream, 'Câmera');
@@ -59,24 +63,30 @@ export class WmixEngine {
   }
   setProgram(id: string) {
     if (!this.sources.has(id)) throw new Error('Fonte inexistente');
+    this.fadeFrom = null;
     this.program = id; this.onProgramChanged?.(id);
   }
   transitionTo(id: string, durationMs = 500) {
     if (!this.sources.has(id)) throw new Error("Fonte inexistente");
     if (id === this.program) return;
-    this.fadeFrom = this.program;
+    const previous = this.program;
+    this.setProgram(id);
+    this.fadeFrom = previous;
     this.fadeStart = performance.now();
     this.fadeDuration = Math.max(1, durationMs);
-    this.setProgram(id);
   }
   getVideo(id: string) { return this.videos.get(id) ?? null; }
   remove(id: string) {
     const source = this.sources.get(id);
     if (!source) return;
-    this.sources.delete(id); this.videos.delete(id);
+    this.sources.delete(id);
+    const video = this.videos.get(id);
+    if (video) { video.pause(); video.srcObject = null; }
+    this.videos.delete(id);
     source.stream.getTracks().forEach(track => track.stop());
     if (this.fadeFrom === id) this.fadeFrom = null;
     if (this.overlay === id) this.overlay = null;
+    if (this.fadeFrom && !this.sources.has(this.fadeFrom)) this.fadeFrom = null;
     if (this.program === id) { this.program = this.sources.keys().next().value ?? null; this.onProgramChanged?.(this.program); }
     this.onSourcesChanged?.();
   }
