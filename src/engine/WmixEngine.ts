@@ -313,11 +313,16 @@ export class WmixEngine {
     this.fadeScene = previousScene;
     this.fadeSnapshot = snapshot.width && snapshot.height ? snapshot : null;
     this.fadeStart = performance.now();
-    this.fadeDuration = Math.max(1, durationMs);
+    this.fadeDuration = Number.isFinite(durationMs) ? Math.max(1, durationMs) : 500;
+    this.manualFadeProgress = null;
   }
   setManualTransition(id: string, progress: number) {
     if (!this.sources.has(id)) throw new Error("Fonte inexistente");
-    const p = Math.max(0, Math.min(1, progress));
+    const p = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
+    if (this.manualFadeProgress !== null && this.program !== id) {
+      // A different target starts a new manual transition, never reuse the old snapshot.
+      this.manualFadeProgress = null;
+    }
     if (this.manualFadeProgress === null) {
       if (id === this.program) return;
       const previous = this.program;
