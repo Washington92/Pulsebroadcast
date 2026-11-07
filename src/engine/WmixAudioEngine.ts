@@ -1,5 +1,5 @@
 /** Independent wMix audio bus based on the Web Audio API. No OBS code or process. */
-export type AudioInput = { id: string; name: string; stream: MediaStream; volume: number; muted: boolean; cue: boolean; busA: boolean; busB: boolean; level: number };
+export type AudioInput = { id: string; name: string; stream: MediaStream; volume: number; muted: boolean; cue: boolean; busA: boolean; busB: boolean; level: number; peak: number; clipping: boolean };
 type Channel = { input: AudioInput; source: MediaStreamAudioSourceNode; gain: GainNode; analyser: AnalyserNode; samples: Float32Array<ArrayBuffer> };
 export class WmixAudioEngine {
   private context: AudioContext | null = null;
@@ -44,7 +44,7 @@ export class WmixAudioEngine {
     gain.connect(sendA); gain.connect(sendB);
     sendA.connect(this.busMasters!.a); sendB.connect(this.busMasters!.b);
     this.busSends.set(id, { a: sendA, b: sendB });
-    const input: AudioInput = { id, name: stream.getAudioTracks()[0].label || "Microfone", stream, volume: 1, muted: false, cue: false, busA: false, busB: false, level: 0 };
+    const input: AudioInput = { id, name: stream.getAudioTracks()[0].label || "Microfone", stream, volume: 1, muted: false, cue: false, busA: false, busB: false, level: 0, peak: 0, clipping: false };
     this.channels.set(id, { input, source, gain, analyser, samples: new Float32Array(new ArrayBuffer(analyser.fftSize * 4)) });
     stream.getAudioTracks().forEach(t => t.addEventListener("ended", () => this.remove(id), { once: true }));
     if (!this.raf) this.measure();
@@ -115,8 +115,11 @@ export class WmixAudioEngine {
   private measure = () => {
     for (const ch of this.channels.values()) {
       ch.analyser.getFloatTimeDomainData(ch.samples);
-      let sum = 0; for (const sample of ch.samples) sum += sample * sample;
+      let sum = 0; let peak = 0;
+      for (const sample of ch.samples) { sum += sample * sample; peak = Math.max(peak, Math.abs(sample)); }
       ch.input.level = Math.min(1, Math.sqrt(sum / ch.samples.length) * 3);
+      ch.input.peak = Math.max(peak, ch.input.peak * 0.985);
+      ch.input.clipping = peak >= 0.98;
     }
     if (this.channels.size) { const now = performance.now(); if (now - this.lastMeterEmit >= 66) { this.lastMeterEmit = now; this.emit(); } this.raf = requestAnimationFrame(this.measure); }
     else this.raf = 0;
