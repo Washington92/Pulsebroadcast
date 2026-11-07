@@ -165,7 +165,7 @@ const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeProgramStream, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, nativeRemove, nativeRename, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeProgramStream?: MediaStream | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; nativeRemove?: (id: string) => void; nativeRename?: (id: string, name: string) => void; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [panelLayout, setPanelLayout] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("wmix-panel-layout-v1") || "{}") as Record<string, number>;
+      const saved = JSON.parse(localStorage.getItem("wmix-panel-layout-v2") || "{}") as Record<string, number>;
       return { preview: saved.preview ?? 50, inputs: saved.inputs ?? 62, upper: saved.upper ?? 410 };
     } catch { return { preview: 50, inputs: 62, upper: 410 }; }
   });
@@ -176,15 +176,15 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const dragLayout = (event: React.PointerEvent<HTMLElement>, part: "preview" | "inputs" | "upper") => {
     if (event.button !== 0) return;
     event.preventDefault();
-    const target = event.currentTarget;
     const startX = event.clientX;
     const startY = event.clientY;
     const start = layoutRef.current;
     const area = part === "inputs" ? lowerDeckRef.current : upperDeckRef.current;
-    const width = area?.clientWidth || 1200;
+    const width = Math.max(1, (area?.clientWidth || 1200) - (part === "preview" ? 300 : 6));
+    const availableHeight = Math.max(250, (upperDeckRef.current?.parentElement?.clientHeight || window.innerHeight) - 210);
     const move = (e: PointerEvent) => {
-      const value = part === "upper" ? Math.max(260, Math.min(window.innerHeight - 270, start.upper + e.clientY - startY))
-        : Math.max(25, Math.min(75, (part === "preview" ? start.preview : start.inputs) + (e.clientX - startX) / width * 100));
+      const value = part === "upper" ? Math.max(250, Math.min(availableHeight, start.upper + e.clientY - startY))
+        : Math.max(part === "preview" ? 30 : 25, Math.min(part === "preview" ? 70 : 75, (part === "preview" ? start.preview : start.inputs) + (e.clientX - startX) / width * 100));
       setPanelLayout(current => ({ ...current, [part]: value }));
     };
     const stop = () => {
@@ -200,7 +200,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
     window.addEventListener("pointerup", stop, { once: true });
     window.addEventListener("pointercancel", stop, { once: true });
   };
-  useEffect(() => { localStorage.setItem("wmix-panel-layout-v1", JSON.stringify(panelLayout)); }, [panelLayout]);
+  useEffect(() => { localStorage.setItem("wmix-panel-layout-v2", JSON.stringify(panelLayout)); }, [panelLayout]);
   const [demoSources, setSources] = useState<Source[]>([]);
   const sources: Source[] = nativeAdd ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [lockedInputs, setLockedInputs] = useState<string[]>([]);
@@ -374,6 +374,9 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         </div>
       </header>
 
+      <div className="flex shrink-0 justify-end">
+        <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 62, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
+      </div>
       {/* ===== Upper deck ===== */}
       <section ref={upperDeckRef} className="grid min-h-[260px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px 164px minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
         {/* Preview */}
