@@ -140,8 +140,18 @@ export class WmixEngine {
     source.stream.getTracks().forEach(track => track.stop());
     if (this.fadeFrom === id) this.fadeFrom = null;
     if (this.overlay === id) this.overlay = null;
-    if (this.fadeFrom && !this.sources.has(this.fadeFrom)) this.fadeFrom = null;
-    if (this.program === id) { this.program = this.sources.keys().next().value ?? null; this.onProgramChanged?.(this.program); }
+    if (this.previewScene?.base === id) this.previewScene.base = null;
+    if (this.previewScene?.overlay === id) this.previewScene.overlay = null;
+    // Keep the snapshot as a safe fallback when a source disappears mid-transition.
+    if (this.fadeScene?.base === id) this.fadeScene.base = null;
+    if (this.fadeScene?.overlay === id) this.fadeScene.overlay = null;
+    if (this.program === id) {
+      this.fadeSnapshot = null;
+      this.fadeScene = null;
+      this.fadeFrom = null;
+      this.program = this.sources.keys().next().value ?? null;
+      this.onProgramChanged?.(this.program);
+    }
     this.onSourcesChanged?.();
   }
   private draw = () => {
