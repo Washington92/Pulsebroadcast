@@ -149,8 +149,11 @@ function Fader({ value, onChange, level, label }: { value: number; onChange: (n:
 const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
-export function Switcher() {
-  const [sources, setSources] = useState(initialSources);
+export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "" }: { obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string }) {
+  const [demoSources, setSources] = useState(initialSources);
+  const sources: Source[] = obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
+  const [obsError, setObsError] = useState("");
+  const [obsBusy, setObsBusy] = useState(false);
   const [programId, setProgramId] = useState(2);
   const [previewId, setPreviewId] = useState(6);
   const [transition, setTransition] = useState<TransitionType>("Fade");
@@ -171,8 +174,10 @@ export function Switcher() {
   const [manual, setManual] = useState(false);
   const animRef = useRef<number | null>(null);
 
-  const pgm = sources.find((s) => s.id === programId);
-  const pvw = sources.find((s) => s.id === previewId);
+  const currentProgramId = obsConnected ? (sources.find(s => s.name === obsProgram)?.id ?? 0) : programId;
+  const currentPreviewId = obsConnected && obsPreview ? (sources.find(s => s.name === obsPreview)?.id ?? previewId) : previewId;
+  const pgm = sources.find((s) => s.id === currentProgramId);
+  const pvw = sources.find((s) => s.id === currentPreviewId);
   const levels = useMeters(sources);
   const pvwHead = usePlayhead(11);
   const pgmHead = usePlayhead(24);
@@ -192,11 +197,25 @@ export function Switcher() {
   }, [previewId, programId]);
 
   const cut = useCallback(() => {
+    if (obsConnected) {
+      const scene = sources.find(s => s.id === previewId)?.name;
+      if (!scene || !obsTake || obsBusy) return;
+      setObsBusy(true); setObsError("");
+      void obsTake(scene, "cut", 0).catch(e => setObsError(String(e))).finally(() => setObsBusy(false));
+      return;
+    }
     if (animRef.current) cancelAnimationFrame(animRef.current);
     complete();
-  }, [complete]);
+  }, [complete, obsConnected, obsTake, obsBusy, previewId, sources]);
 
   const auto = useCallback(() => {
+    if (obsConnected) {
+      const scene = sources.find(s => s.id === previewId)?.name;
+      if (!scene || !obsTake || obsBusy) return;
+      setObsBusy(true); setObsError("");
+      void obsTake(scene, "auto", Math.round(durations[transition] * 1000)).catch(e => setObsError(String(e))).finally(() => setObsBusy(false));
+      return;
+    }
     if (animRef.current) return;
     const dur = durations[transition] * 1000;
     const t0 = performance.now();
@@ -210,7 +229,7 @@ export function Switcher() {
       }
     };
     animRef.current = requestAnimationFrame(step);
-  }, [durations, transition, complete]);
+  }, [durations, transition, complete, obsConnected, obsTake, obsBusy, previewId, sources]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -236,6 +255,7 @@ export function Switcher() {
   };
 
   const addInput = () => {
+    if (obsConnected) { setObsError("Crie a cena no OBS Studio e reconecte para atualizar a lista."); return; }
     const id = Math.max(...sources.map((s) => s.id)) + 1;
     const src = initialSources[(id - 1) % 10]!;
     setSources((ss) => [...ss, { ...src, id, name: `Input ${id}`, remaining: "-0:00", overlay: null }]);
@@ -256,6 +276,7 @@ export function Switcher() {
 
   return (
     <div className="flex h-screen min-h-[720px] min-w-[1200px] flex-col gap-2 overflow-hidden bg-background p-2 font-sans text-foreground">
+      {obsError && <div role="alert" className="rounded bg-red-900 px-3 py-1 text-xs text-white">Falha no comando OBS: {obsError}</div>}
       {/* ===== Top bar ===== */}
       <header className="flex h-10 shrink-0 items-center gap-2">
         <div className="flex items-center gap-2 pr-2">
@@ -439,13 +460,13 @@ export function Switcher() {
             <div className="grid min-h-0 flex-1 auto-rows-min gap-2 overflow-y-auto px-2 pb-2"
               style={{ gridTemplateColumns: `repeat(${zoom}, minmax(0, 1fr))` }}>
               {sources.map((s) => {
-                const isPgm = s.id === programId, isPvw = s.id === previewId;
+                const isPgm = s.id === currentProgramId, isPvw = s.id === currentPreviewId;
                 return (
                   <div key={s.id}
                     className={cn("rounded-md border bg-card p-1 transition-shadow",
                       isPgm ? "glow-pgm border-transparent" : isPvw ? "glow-pvw border-transparent" : "border-border")}>
                     <button className="relative block aspect-video w-full overflow-hidden rounded-sm bg-background"
-                      onClick={() => setPreviewId(s.id)} onDoubleClick={() => { setPreviewId(s.id); setTimeout(cut, 0); }}
+                      onClick={() => { setPreviewId(s.id); if (obsConnected && obsPrepare) void obsPrepare(s.name).catch(e => setObsError(String(e))); }} onDoubleClick={() => { if (!obsConnected) { setPreviewId(s.id); setTimeout(cut, 0); } else if (obsTake) { void obsTake(s.name, "cut", 0).catch(e => setObsError(String(e))); } }}
                       title="Clique: preview · Duplo clique: corte">
                       <Frame s={s} />
                       {s.remaining && <span className="absolute bottom-0.5 right-1 rounded bg-background/80 px-1 font-mono text-[9px] font-bold">{s.remaining}</span>}
