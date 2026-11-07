@@ -1,5 +1,6 @@
 /** wMix Engine 0.1 — browser capture/composition; no OBS dependency. */
 export type WmixSource = { id: string; name: string; stream: MediaStream };
+export type PipLayout = { x: number; y: number; width: number };
 export class WmixEngine {
   private sources = new Map<string, WmixSource>();
   private videos = new Map<string, HTMLVideoElement>();
@@ -7,6 +8,7 @@ export class WmixEngine {
   private frame = 0;
   private program: string | null = null;
   private overlay: string | null = null;
+  private pipLayout: PipLayout = { x: 0.685, y: 0.68, width: 0.29 };
   private fadeFrom: string | null = null;
   private fadeStart = 0;
   private fadeDuration = 0;
@@ -18,6 +20,16 @@ export class WmixEngine {
   list() { return [...this.sources.values()]; }
   currentProgram() { return this.program; }
   currentOverlay() { return this.overlay; }
+  currentPipLayout(): PipLayout { return { ...this.pipLayout }; }
+  setPipLayout(layout: PipLayout) {
+    const width = Math.max(0.1, Math.min(0.8, Number.isFinite(layout.width) ? layout.width : 0.29));
+    const height = width * 9 / 16 * (this.canvas ? this.canvas.width / this.canvas.height : 16 / 9);
+    this.pipLayout = {
+      width,
+      x: Math.max(0, Math.min(1 - width, Number.isFinite(layout.x) ? layout.x : 0)),
+      y: Math.max(0, Math.min(1 - height, Number.isFinite(layout.y) ? layout.y : 0)),
+    };
+  }
   setOverlay(id: string | null) {
     if (id !== null && !this.sources.has(id)) throw new Error("Fonte de overlay inexistente");
     this.overlay = id;
@@ -92,11 +104,10 @@ export class WmixEngine {
       // Independent picture-in-picture layer composited into the Program recording.
       const overlayVideo = this.overlay ? this.videos.get(this.overlay) : null;
       if (overlayVideo && overlayVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && overlayVideo.videoWidth) {
-        const margin = canvas.width * 0.025;
-        const boxWidth = canvas.width * 0.29;
+        const boxWidth = canvas.width * this.pipLayout.width;
         const boxHeight = boxWidth * 9 / 16;
-        const x = canvas.width - boxWidth - margin;
-        const y = canvas.height - boxHeight - margin;
+        const x = canvas.width * this.pipLayout.x;
+        const y = canvas.height * this.pipLayout.y;
         ctx.fillStyle = '#05070b';
         ctx.fillRect(x - 3, y - 3, boxWidth + 6, boxHeight + 6);
         ctx.save();
