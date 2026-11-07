@@ -385,7 +385,10 @@ export class WmixEngine {
       if (delta > frameInterval * 1.5) this.droppedFrames += Math.max(0, Math.round(delta / frameInterval) - 1);
     }
     this.lastFrameAt = now;
-    this.lastRenderAt = now - ((now - (this.lastRenderAt || now)) % frameInterval);
+    // Advance from the previous scheduled slot to avoid drift at 60 Hz / 30 FPS.
+    // If the UI thread stalls, resynchronize instead of accumulating a frame backlog.
+    const elapsed = this.lastRenderAt ? now - this.lastRenderAt : frameInterval;
+    this.lastRenderAt = now - (elapsed % frameInterval);
     if (!this.frameWindowStart) this.frameWindowStart = now;
     this.frameCount++;
     if (now - this.frameWindowStart >= 1000) {
