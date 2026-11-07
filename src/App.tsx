@@ -112,6 +112,17 @@ export default function App() {
   const [stagedBase, setStagedBase] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [performanceMetrics, setPerformanceMetrics] = useState({ fps: 0, droppedFrames: 0 });
+  const [outputFps, setOutputFps] = useState<24 | 25 | 30 | 50 | 60>(() => {
+    try {
+      const value = Number(localStorage.getItem("wmix-output-fps"));
+      return ([24, 25, 30, 50, 60] as const).find(fps => fps === value) ?? 30;
+    } catch { return 30; }
+  });
+  useEffect(() => {
+    engine.setTargetFps(outputFps);
+    try { localStorage.setItem("wmix-output-fps", String(outputFps)); } catch { /* armazenamento indisponível */ }
+  }, [engine, outputFps]);
+
   const [recordBus, setRecordBus] = useState<"master" | "a" | "b">("master");
   const [error, setError] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -372,6 +383,16 @@ export default function App() {
     <canvas ref={canvas} width={1280} height={720} className="pointer-events-none fixed -left-[9999px] top-0" aria-hidden="true" />
     {stagedScene && <div className="fixed right-3 top-16 z-[115] w-72 max-w-[90vw] rounded-lg border border-primary bg-card p-2 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground"><span>PREVIEW • {stagedScene.name}</span><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Fechar preview">✕</button></div><select aria-label="Câmera principal do Preview" value={stagedBase ?? ""} onChange={e => setStagedBase(e.target.value || null)} className="mb-2 w-full rounded border border-border bg-card p-1 text-xs text-foreground"><option value="">Escolha a câmera principal</option>{sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select><ScenePreview engine={engine} scene={stagedScene} sources={sources} baseId={stagedBase} /><p className="mt-1 text-[10px] text-muted-foreground">Prévia visual: câmera atual e PiP preparado. O Program permanece inalterado até TAKE.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => takeScene("cut")} className="flex-1 rounded bg-primary px-2 py-2 text-xs font-bold text-primary-foreground">CUT cena</button><button type="button" onClick={() => takeScene("fade")} className="flex-1 rounded bg-secondary px-2 py-2 text-xs font-bold text-foreground">FADE 500ms</button></div></div>}
     {showAdvancedControls && <aside id="wmix-advanced-controls" aria-label="Controles avançados do motor wMix" className="fixed bottom-14 right-3 top-14 z-[120] w-[min(410px,calc(100vw-24px))] overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-2xl"><h2 className="mb-3 text-sm font-semibold text-foreground">Controles avançados</h2>
+      <section aria-label="Configuração do motor de vídeo" className="mb-3 space-y-2 rounded-lg border border-border p-2 text-xs text-foreground">
+        <h3 className="font-semibold">Motor de vídeo · Saída</h3>
+        <label className="flex items-center justify-between gap-3">Taxa de quadros (FPS)
+          <select aria-label="FPS de saída" value={outputFps} disabled={recording} onChange={e => setOutputFps(Number(e.target.value) as 24 | 25 | 30 | 50 | 60)} className="rounded border border-border bg-card p-2 disabled:opacity-50">
+            {[24, 25, 30, 50, 60].map(fps => <option key={fps} value={fps}>{fps} FPS</option>)}
+          </select>
+        </label>
+        <div className="flex justify-between gap-2 font-mono text-[10px] text-muted-foreground"><span>Renderização: {performanceMetrics.fps} FPS</span><span>Quadros atrasados: {performanceMetrics.droppedFrames}</span></div>
+        <p className="text-[10px] text-muted-foreground">A taxa define a composição e a captura da gravação. Alterações ficam bloqueadas durante a gravação. FPS exibido é medido, não estimado.</p>
+      </section>
       <section aria-label="Enquadramento de fonte" className="mb-3 space-y-2 rounded-lg border border-border p-2 text-xs text-foreground">
         <h3 className="font-semibold">Enquadramento da imagem</h3>
         <select aria-label="Fonte para enquadrar" value={transformSourceId} onChange={e => setTransformSourceId(e.target.value)} className="w-full rounded border border-border bg-card p-2"><option value="">Selecione uma fonte</option>{sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select>
