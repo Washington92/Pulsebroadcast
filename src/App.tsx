@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Switcher } from "./components/pulse/Switcher";
 import ObsPanel, { type ObsMonitorState } from "./components/ObsPanel";
 import { type ObsClient } from "./services/obs";
@@ -13,6 +13,18 @@ export default function App() {
     if (!client) { setScenes([]); return; }
     void client.scenes().then(list => setScenes(list.map(s => s.sceneName))).catch(() => setScenes([]));
   }, []);
+  useEffect(() => {
+    if (!obs) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const list = await obs.scenes();
+        if (active) setScenes(list.map(scene => scene.sceneName));
+      } catch { /* OBS connection state is handled by ObsPanel. */ }
+    };
+    const timer = setInterval(() => { void refresh(); }, 5000);
+    return () => { active = false; clearInterval(timer); };
+  }, [obs]);
   const onMonitorChange = useCallback((state: ObsMonitorState) => setMonitor(state), []);
   const prepare = useCallback(async (scene: string) => {
     if (!obs) throw new Error("Conecte o OBS primeiro.");
@@ -29,8 +41,8 @@ export default function App() {
       if (found) {
         await obs.setCurrentSceneTransition(found.transitionName);
         if (!found.transitionFixed && mode === "auto") await obs.setCurrentSceneTransitionDuration(durationMs);
-      } else if (mode === "cut") {
-        throw new Error("A transição Cut não está disponível no OBS.");
+      } else {
+        throw new Error(`A transição ${transitionName} não está disponível no OBS.`);
       }
       await obs.triggerStudioTransition();
     } else {
