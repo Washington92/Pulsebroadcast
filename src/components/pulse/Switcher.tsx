@@ -180,7 +180,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
     const startY = event.clientY;
     const start = layoutRef.current;
     const area = part === "inputs" ? lowerDeckRef.current : upperDeckRef.current;
-    const width = Math.max(1, (area?.clientWidth || 1200) - (part === "preview" ? 300 : 6));
+    const width = Math.max(1, (area?.clientWidth || 1200) - (part === "preview" ? 360 : 6));
     const availableHeight = Math.max(320, (upperDeckRef.current?.parentElement?.clientHeight || window.innerHeight) - 210);
     const move = (e: PointerEvent) => {
       const value = part === "upper" ? Math.max(320, Math.min(availableHeight, start.upper + e.clientY - startY))
@@ -388,7 +388,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 62, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
       </div>
       {/* ===== Upper deck ===== */}
-      <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px 164px minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
+      <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px 224px minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
         {/* Preview */}
         <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-7 items-center gap-2 px-2 text-xs">
@@ -403,74 +403,59 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         </div>
 
         <div role="separator" aria-label="Redimensionar Preview e Program" aria-orientation="vertical" title="Arraste para ajustar Preview e Program" onPointerDown={e => dragLayout(e, "preview")} className="cursor-col-resize rounded bg-border/50 hover:bg-slate-500 active:bg-slate-400" />
-        {/* Center console */}
-        <div className="flex min-h-0 min-w-0 flex-col gap-1 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-1.5">
-          <div className="text-center font-mono text-lg font-bold tabular-nums tracking-wider">{clock}</div>
-          <div className="flex justify-between font-mono text-[9px]">
-            <span className="text-muted-foreground">{fmtElapsed(elapsed)}</span>
-            <span className="text-muted-foreground" title="Estado de transmissão e gravação">{recording ? "REC ativo" : streaming ? "LIVE ativo" : "Em espera"}</span>
+        {/* Center console — live switching desk */}
+        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-2">
+          <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+            <div className="min-w-0"><div className="font-mono text-base font-bold tabular-nums tracking-wide">{clock}</div><div className="font-mono text-[10px] text-muted-foreground">{fmtElapsed(elapsed)}</div></div>
+            <span className={cn("shrink-0 rounded border px-2 py-1 text-[10px] font-semibold", recording || streaming ? "border-primary text-primary" : "border-border text-muted-foreground")}>{recording ? "● REC" : streaming ? "● LIVE" : "EM ESPERA"}</span>
           </div>
-          <div className="flex gap-1">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <button onClick={auto} className="rounded bg-primary px-2 py-1 text-left text-primary-foreground hover:brightness-110">
-                <div className="flex justify-between"><span className="text-sm font-bold">AUTO</span><span className="text-[8px]">Enter</span></div>
-                <div className="truncate text-[9px] font-medium">{previewId} {pvw?.name} - {transition} {durations[transition]} s</div>
+          <div className="grid grid-cols-[minmax(0,1fr)_38px] gap-2">
+            <div className="flex min-w-0 flex-col gap-2">
+              <button onClick={auto} className="flex min-h-12 flex-col justify-center rounded-md bg-primary px-3 py-2 text-left text-primary-foreground hover:brightness-110">
+                <div className="flex items-center justify-between gap-2"><span className="text-base font-bold">AUTO</span><span className="text-[10px] opacity-80">Enter</span></div>
+                <span className="block truncate text-[10px]" title={pvw?.name || "Sem fonte"}>{pvw?.name || "Sem fonte"} · {transition} {durations[transition]}s</span>
               </button>
-              <button onClick={cut} className="rounded border border-border bg-secondary px-2 py-1 text-left hover:bg-accent">
-                <div className="flex justify-between"><span className="text-sm font-bold">CUT</span><span className="text-[8px] text-muted-foreground">Espaço</span></div>
-                <div className="text-[9px] text-muted-foreground">corte seco</div>
+              <button onClick={cut} className="flex min-h-11 items-center justify-between rounded-md border border-border bg-secondary px-3 py-2 text-left hover:bg-accent">
+                <span className="text-base font-bold">CUT</span><span className="text-[10px] text-muted-foreground">Espaço</span>
               </button>
-              <div className="grid grid-cols-2 gap-1">
+              <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Tipo de transição">
                 {(Object.keys(durations) as TransitionType[]).map((t) => (
-                  <div key={t} onClick={() => setTransition(t)} role="button"
-                    className={cn("flex h-6 cursor-pointer items-center justify-between rounded border px-1.5 text-[10px]",
-                      transition === t ? "border-primary bg-primary/15 text-primary" : "border-border bg-secondary")}>
-                    <span>{t}</span>
-                    <input type="number" step={0.1} min={0.1} max={5} value={durations[t]} aria-label={`Duração ${t}`}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => setDurations({ ...durations, [t]: Math.max(0.1, +e.target.value || 0.1) })}
-                      className="w-7 bg-transparent text-right font-mono text-[9px] text-muted-foreground outline-none" />
+                  <div key={t} className={cn("flex min-w-0 items-center rounded-md border", transition === t ? "border-primary bg-primary/10" : "border-border bg-secondary")}>
+                    <button type="button" onClick={() => setTransition(t)} aria-pressed={transition === t} className={cn("min-w-0 flex-1 truncate px-1.5 py-2 text-left text-[11px] font-medium", transition === t && "text-primary")}>{t}</button>
+                    <input type="number" step={0.1} min={0.1} max={5} value={durations[t]} aria-label={`Duração de ${t} em segundos`} onChange={e => setDurations(d => ({...d, [t]: Math.max(0.1, Math.min(5, Number(e.target.value) || 0.1))}))} className="w-9 shrink-0 border-l border-border bg-transparent py-2 pr-1 text-right font-mono text-[10px] text-muted-foreground outline-none" />
                   </div>
                 ))}
               </div>
             </div>
-            <div className="flex w-7 flex-col items-center">
-              <span className="text-[8px] font-bold text-muted-foreground">T-BAR</span>
-              <div className="relative mt-1 h-[104px] w-4 rounded-md border border-border bg-background shadow-inner">
+            <div className="flex min-w-0 flex-col items-center rounded-md border border-border/60 bg-background/40 px-1 py-2">
+              <span className="text-[9px] font-bold tracking-wide text-muted-foreground">T-BAR</span>
+              <div className="relative mt-2 h-36 w-5 rounded-md border border-border bg-background shadow-inner">
                 <div className="absolute inset-x-1/2 inset-y-1 w-px bg-border" />
-                <input type="range" min={0} max={1} step={0.01} value={progress} aria-label="T-Bar"
-                  onChange={(e) => onTbar(+e.target.value)}
-                  className="vfader absolute inset-0 h-full w-full cursor-grab opacity-0" />
-                <div className="pointer-events-none absolute -left-1 h-3.5 w-6 rounded border border-slate-400 bg-gradient-to-b from-slate-100 to-slate-500 shadow-md"
-                  style={{ top: `calc(${progress * 100}% * 0.87)` }} />
+                <input type="range" min={0} max={1} step={0.01} value={progress} aria-label="T-Bar" onChange={e => onTbar(+e.target.value)} className="vfader absolute inset-0 h-full w-full cursor-grab opacity-0" />
+                <div className="pointer-events-none absolute -left-1.5 h-4 w-8 rounded border border-slate-400 bg-gradient-to-b from-slate-100 to-slate-500 shadow-md" style={{ top: `calc(${progress * 100}% * 0.85)` }} />
               </div>
+              <span className="mt-2 font-mono text-[10px] text-muted-foreground">{Math.round(progress * 100)}%</span>
             </div>
           </div>
-          <button onClick={() => setFtb(!ftb)}
-            className={cn(btn, "h-7 font-bold", ftb && "animate-pulse border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
-            <Square className="h-3 w-3" /> FTB
-          </button>
-          <div className="grid grid-cols-2 gap-1">
-            {overlays.map((o, i) => {
-              const s = sources.find((x) => x.id === o);
-              return (
-                <button key={i} onClick={() => setOverlays((ov) => ov.map((v, j) => (j === i ? (v ? null : previewId) : v)))}
-                  className={cn("rounded border px-1.5 py-0.5 text-left text-[9px]",
-                    o ? "border-warn bg-warn text-primary-foreground" : "border-border bg-secondary")}>
-                  <div className="truncate font-semibold">{o ? `${i + 1} ${s?.name}` : `Overlay ${i + 1}`}</div>
-                  <div className={o ? "font-bold" : "text-muted-foreground"}>{o ? "NO AR" : "livre"}</div>
-                </button>
-              );
-            })}
+          <div className="border-t border-border/60 pt-2">
+            <button onClick={() => setFtb(!ftb)} aria-pressed={ftb} className={cn("flex h-9 w-full items-center justify-center gap-2 rounded-md border text-xs font-bold", ftb ? "border-tally-pgm bg-tally-pgm text-destructive-foreground" : "border-border bg-secondary hover:bg-accent")}><Square className="h-3.5 w-3.5" />FTB · Fade to Black</button>
           </div>
-          <div className="flex gap-1">
-            <button onClick={() => setAutoCut(!autoCut)} className={cn(btn, "h-6 flex-1 text-[9px]", autoCut && "border-primary text-primary")}>
-              <Mic className="h-3 w-3" />Auto corte {autoCut ? "ligado" : "desligado"}
-            </button>
-            <button className={cn(btn, "h-6 text-[9px]")}>Mais</button>
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sobreposições</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {overlays.map((o, i) => {
+                const source = sources.find(x => x.id === o);
+                return <button key={i} type="button" onClick={() => setOverlays(ov => ov.map((v,j) => j === i ? (v ? null : previewId || null) : v))} aria-pressed={!!o} title={source?.name || `Sobreposição ${i + 1}`} className={cn("flex min-h-11 min-w-0 flex-col justify-center rounded-md border px-2 py-1 text-left", o ? "border-warn bg-warn/20 text-foreground" : "border-border bg-secondary hover:bg-accent")}>
+                  <span className="text-[10px] font-bold">Overlay {i + 1}</span>
+                  <span className={cn("block w-full truncate text-[10px]", o ? "text-warn" : "text-muted-foreground")}>{o ? source?.name || "Ativo" : "Livre"}</span>
+                </button>;
+              })}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 border-t border-border/60 pt-2">
+            <button type="button" onClick={() => setAutoCut(!autoCut)} aria-pressed={autoCut} className={cn(btn, "h-9 min-w-0 flex-1 justify-start px-2 text-[11px]", autoCut && "border-primary text-primary")}><Mic className="h-3.5 w-3.5 shrink-0" /><span className="truncate">Auto corte: {autoCut ? "Ligado" : "Desligado"}</span></button>
           </div>
         </div>
-
         {/* Program */}
         <div className="glow-pgm flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-7 items-center gap-2 px-2 text-xs">
