@@ -1,9 +1,12 @@
 /** wMix Engine 0.1 — browser capture/composition; no OBS dependency. */
-export type WmixSource = { id: string; name: string; stream: MediaStream; kind: "camera" | "screen" };
+export type WmixSource = { id: string; name: string; stream: MediaStream; kind: "camera" | "screen"; offline?: boolean };
 export type PipLayout = { x: number; y: number; width: number };
 export class WmixEngine {
   private sources = new Map<string, WmixSource>();
   private videos = new Map<string, HTMLVideoElement>();
+  private recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private recoveryAttempts = new Map<string, number>();
+  private cameraDeviceIds = new Map<string, string>();
   private canvas: HTMLCanvasElement | null = null;
   private previewCanvas: HTMLCanvasElement | null = null;
   private previewScene: { base: string | null; overlay: string | null; layout: PipLayout } | null = null;
@@ -95,7 +98,10 @@ export class WmixEngine {
   }
   async addCamera(deviceId?: string) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
-    return this.addStream(stream, 'Câmera', 'camera');
+    const id = this.addStream(stream, 'Câmera', 'camera');
+    const resolvedDeviceId = deviceId || stream.getVideoTracks()[0]?.getSettings?.().deviceId;
+    if (resolvedDeviceId) this.cameraDeviceIds.set(id, resolvedDeviceId);
+    return id;
   }
   /** Refresh a camera stream without changing its scene/source ID. */
   async reconnectCamera(id: string, deviceId?: string) {
@@ -103,7 +109,7 @@ export class WmixEngine {
     if (!source) throw new Error("Fonte não encontrada para reconexão");
     if (source.kind !== "camera") throw new Error("A fonte selecionada não é uma câmera");
     const previousTrack = source.stream.getVideoTracks()[0];
-    const targetDevice = deviceId ?? previousTrack.getSettings?.().deviceId;
+    const targetDevice = deviceId ?? this.cameraDeviceIds.get(id) ?? previousTrack.getSettings?.().deviceId;
     const replacement = await navigator.mediaDevices.getUserMedia({
       video: targetDevice ? { deviceId: { exact: targetDevice } } : true,
       audio: false,
@@ -119,11 +125,17 @@ export class WmixEngine {
       throw new Error("Vídeo da fonte indisponível");
     }
     source.stream = replacement;
+    source.offline = false;
+    if (targetDevice) this.cameraDeviceIds.set(id, targetDevice);
+    this.recoveryAttempts.delete(id);
+    const pending = this.recoveryTimers.get(id);
+    if (pending !== undefined) clearTimeout(pending);
+    this.recoveryTimers.delete(id);
     source.name = replacement.getVideoTracks()[0]?.label || source.name;
     video.srcObject = replacement;
     void video.play().catch(() => {});
     replacement.getVideoTracks().forEach(track => track.addEventListener("ended", () => {
-      if (this.sources.get(id)?.stream === replacement) this.remove(id);
+      if (this.sources.get(id)?.stream === replacement) this.handleTrackEnded(id);
     }, { once: true }));
     // Stop only after the replacement is attached; old ended events are ignored.
     const previous = previousTrack;
@@ -145,11 +157,32 @@ export class WmixEngine {
     this.sources.set(id, { id, name, stream, kind });
     stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
       // Ignore delayed events after a source has already been removed.
-      if (this.sources.get(id)?.stream === stream) this.remove(id);
+      if (this.sources.get(id)?.stream === stream) this.handleTrackEnded(id);
     }, { once: true }));
     if (!this.program) this.setProgram(id);
     this.onSourcesChanged?.();
     return id;
+  }
+  private handleTrackEnded(id: string) {
+    const source = this.sources.get(id);
+    if (!source) return;
+    if (source.kind === "screen") { this.remove(id); return; }
+    source.offline = true;
+    this.onSourcesChanged?.();
+    this.scheduleRecovery(id);
+  }
+  private scheduleRecovery(id: string) {
+    if (this.recoveryTimers.has(id) || !this.sources.has(id)) return;
+    const attempts = this.recoveryAttempts.get(id) ?? 0;
+    if (attempts >= 5) return; // Stop retrying until manual reconnect.
+    const delay = Math.min(15000, 1000 * 2 ** attempts);
+    this.recoveryTimers.set(id, setTimeout(async () => {
+      this.recoveryTimers.delete(id);
+      if (!this.sources.has(id) || !this.sources.get(id)?.offline) return;
+      this.recoveryAttempts.set(id, attempts + 1);
+      try { await this.reconnectCamera(id); }
+      catch { this.scheduleRecovery(id); }
+    }, delay));
   }
   setProgram(id: string) {
     if (!this.sources.has(id)) throw new Error('Fonte inexistente');
@@ -181,6 +214,11 @@ export class WmixEngine {
     const source = this.sources.get(id);
     if (!source) return;
     this.sources.delete(id);
+    const pending = this.recoveryTimers.get(id);
+    if (pending !== undefined) clearTimeout(pending);
+    this.recoveryTimers.delete(id);
+    this.recoveryAttempts.delete(id);
+    this.cameraDeviceIds.delete(id);
     const video = this.videos.get(id);
     if (video) { video.pause(); video.srcObject = null; }
     this.videos.delete(id);
