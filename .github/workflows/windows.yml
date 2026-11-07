@@ -43,6 +43,14 @@ jobs:
           & src-tauri/resources/ffmpeg.exe -version
           if ($LASTEXITCODE -ne 0) { throw "Bundled FFmpeg failed to execute" }
       - run: npm run tauri build
+      - name: Verify FFmpeg included in installer payload
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem src-tauri/target/release/bundle/nsis -Filter '*.exe' -File | Select-Object -First 1
+          if (-not $exe) { throw "Windows installer missing" }
+          $encoder = Get-Item src-tauri/resources/ffmpeg.exe -ErrorAction Stop
+          if ($encoder.Length -lt 100000) { throw "FFmpeg executable unexpectedly small" }
+          Write-Host "Bundled encoder bytes: $($encoder.Length)"
       - uses: actions/upload-artifact@v4
         with:
           name: wmix-windows-installer
