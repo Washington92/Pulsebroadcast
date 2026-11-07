@@ -55,6 +55,8 @@ export default function App() {
   const [error, setError] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
   const projectFile = useRef<HTMLInputElement>(null);
+  const imageFile = useRef<HTMLInputElement>(null);
+  const [showInputPicker, setShowInputPicker] = useState(false);
   const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
     engine.onSourcesChanged = () => { setSources(engine.list()); setOverlay(engine.currentOverlay() ?? ""); };
@@ -186,6 +188,14 @@ export default function App() {
     try { await engine.reconnectCamera(program, selectedCamera || undefined); await refreshMicrophones(); }
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
+  async function addImage(file?: File) {
+    if (!file) return;
+    setShowInputPicker(false);
+    setError("");
+    try { await engine.addImage(file); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (imageFile.current) imageFile.current.value = ""; }
+  }
   async function addScreen() {
     setError("");
     try { await engine.addScreen(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -225,7 +235,20 @@ export default function App() {
     }
   }
   return <>
-    <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRemove={id => engine.remove(id)} nativeRename={(id, name) => engine.renameSource(id, name)} nativeRecord={toggleRecording} nativeRecording={recording} />
+    <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={() => setShowInputPicker(true)} nativeRemove={id => engine.remove(id)} nativeRename={(id, name) => engine.renameSource(id, name)} nativeRecord={toggleRecording} nativeRecording={recording} />
+    <input ref={imageFile} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" className="hidden" aria-label="Selecionar imagem para input" onChange={e => void addImage(e.target.files?.[0])} />
+    {showInputPicker && <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setShowInputPicker(false); }}>
+      <section role="dialog" aria-modal="true" aria-label="Adicionar input" className="w-full max-w-md rounded-xl border border-border bg-card p-5 text-foreground shadow-2xl">
+        <div className="mb-4 flex items-center justify-between"><h2 className="text-base font-semibold">Adicionar input</h2><button type="button" aria-label="Fechar" onClick={() => setShowInputPicker(false)} className="rounded px-2 py-1 text-muted-foreground hover:bg-secondary">✕</button></div>
+        <p className="mb-4 text-xs text-muted-foreground">Escolha uma fonte para o Preview e Program. Não é necessário ter câmera conectada.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={() => imageFile.current?.click()} className="rounded-lg border border-border bg-secondary/60 p-4 text-left hover:border-primary"><span className="block text-xl">▧</span><strong className="text-sm">Imagem</strong><span className="block text-xs text-muted-foreground">PNG, JPG, WebP e mais</span></button>
+          <button type="button" onClick={() => { setShowInputPicker(false); void addScreen(); }} className="rounded-lg border border-border bg-secondary/60 p-4 text-left hover:border-primary"><span className="block text-xl">▣</span><strong className="text-sm">Tela ou janela</strong><span className="block text-xs text-muted-foreground">Capturar monitor ou aplicativo</span></button>
+          <button type="button" onClick={() => { setShowInputPicker(false); void addCamera(); }} className="rounded-lg border border-border bg-secondary/60 p-4 text-left hover:border-primary"><span className="block text-xl">◉</span><strong className="text-sm">Câmera</strong><span className="block text-xs text-muted-foreground">Webcam, USB ou HDMI</span></button>
+          <div className="rounded-lg border border-dashed border-border p-4 text-left opacity-60"><span className="block text-xl">▶</span><strong className="text-sm">Vídeo (arquivo)</strong><span className="block text-xs text-muted-foreground">Em desenvolvimento</span></div>
+        </div>
+      </section>
+    </div>}
     <canvas ref={canvas} width={1280} height={720} className="pointer-events-none fixed -left-[9999px] top-0" aria-hidden="true" />
     <div className="fixed bottom-3 right-3 z-[120] rounded border border-border bg-card/95 px-3 py-1 text-xs font-mono text-foreground shadow" role="status" aria-label="Desempenho de renderização">FPS {performanceMetrics.fps} · Frames estimados perdidos {performanceMetrics.droppedFrames}</div>
     {stagedScene && <div className="fixed right-3 top-16 z-[115] w-72 max-w-[90vw] rounded-lg border border-primary bg-card p-2 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground"><span>PREVIEW • {stagedScene.name}</span><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Fechar preview">✕</button></div><select aria-label="Câmera principal do Preview" value={stagedBase ?? ""} onChange={e => setStagedBase(e.target.value || null)} className="mb-2 w-full rounded border border-border bg-card p-1 text-xs text-foreground"><option value="">Escolha a câmera principal</option>{sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select><ScenePreview engine={engine} scene={stagedScene} sources={sources} baseId={stagedBase} /><p className="mt-1 text-[10px] text-muted-foreground">Prévia visual: câmera atual e PiP preparado. O Program permanece inalterado até TAKE.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => takeScene("cut")} className="flex-1 rounded bg-primary px-2 py-2 text-xs font-bold text-primary-foreground">CUT cena</button><button type="button" onClick={() => takeScene("fade")} className="flex-1 rounded bg-secondary px-2 py-2 text-xs font-bold text-foreground">FADE 500ms</button></div></div>}
@@ -239,7 +262,7 @@ export default function App() {
       <input ref={projectFile} type="file" accept=".json,application/json" className="hidden" aria-label="Arquivo de projeto wMix" onChange={e => void importProject(e.target.files?.[0])} />
       <button type="button" onClick={exportProject} className="rounded border border-border bg-card px-2 py-2 text-xs text-foreground">Salvar projeto</button>
       <button type="button" onClick={() => projectFile.current?.click()} className="rounded border border-border bg-card px-2 py-2 text-xs text-foreground">Abrir projeto</button>
-      <button onClick={() => void addCamera()} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Câmera real</button>
+      <button onClick={() => setShowInputPicker(true)} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Adicionar input</button>
       <button onClick={() => void addScreen()} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Capturar tela</button>
       <select aria-label="Saída de pré-escuta" defaultValue="" onFocus={() => void refreshMicrophones()} onChange={e => { if (e.target.value) void audio.setCueOutput(e.target.value).catch(err => setError(String(err))); }} className="max-w-40 rounded border border-border bg-card p-2 text-xs text-foreground">
         <option value="">Fones: saída padrão</option>
@@ -255,6 +278,6 @@ export default function App() {
       </div>
     </div>
     {error && <div role="alert" className="fixed bottom-24 right-3 z-[120] max-w-sm rounded bg-red-950 p-3 text-xs text-white">{error}</div>}
-    <div className="wmix-demo-note" role="status">{sources.length ? `wMix Engine • ${sources.length} fonte(s) real(is) • Gravação WebM com áudio quando microfone conectado` : "Interface Lovable • Adicione câmera ou tela para ativar o motor próprio • Sem OBS"}</div>
+    <div className="wmix-demo-note" role="status">{sources.length ? `wMix Engine • ${sources.length} fonte(s) real(is) • Gravação WebM com áudio quando microfone conectado` : "Interface Lovable • Adicione imagem, câmera ou tela para ativar o motor próprio • Sem OBS"}</div>
   </>;
 }
