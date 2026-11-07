@@ -24,6 +24,7 @@ export class WmixEngine {
   private fadeFrom: string | null = null;
   private fadeSnapshot: HTMLCanvasElement | null = null;
   private fadeScene: { base: string | null; overlay: string | null; layout: PipLayout } | null = null;
+  private manualFadeProgress: number | null = null;
   private fadeStart = 0;
   private fadeDuration = 0;
   private recorder: MediaRecorder | null = null;
@@ -267,6 +268,7 @@ export class WmixEngine {
   }
   setProgram(id: string) {
     if (!this.sources.has(id)) throw new Error('Fonte inexistente');
+    this.manualFadeProgress = null;
     this.fadeFrom = null;
     this.fadeSnapshot = null;
     this.fadeScene = null;
@@ -289,6 +291,32 @@ export class WmixEngine {
     this.fadeSnapshot = snapshot.width && snapshot.height ? snapshot : null;
     this.fadeStart = performance.now();
     this.fadeDuration = Math.max(1, durationMs);
+  }
+  setManualTransition(id: string, progress: number) {
+    if (!this.sources.has(id)) throw new Error("Fonte inexistente");
+    const p = Math.max(0, Math.min(1, progress));
+    if (this.manualFadeProgress === null) {
+      if (id === this.program) return;
+      const previous = this.program;
+      const previousScene = { base: previous, overlay: this.overlay, layout: { ...this.pipLayout } };
+      const snapshot = document.createElement("canvas");
+      if (this.canvas) {
+        snapshot.width = this.canvas.width;
+        snapshot.height = this.canvas.height;
+        snapshot.getContext("2d")?.drawImage(this.canvas, 0, 0);
+      }
+      this.setProgram(id);
+      this.fadeFrom = previous;
+      this.fadeScene = previousScene;
+      this.fadeSnapshot = snapshot.width && snapshot.height ? snapshot : null;
+    }
+    this.manualFadeProgress = p;
+    if (p >= 1) {
+      this.fadeSnapshot = null;
+      this.fadeScene = null;
+      this.fadeFrom = null;
+      this.manualFadeProgress = null;
+    }
   }
   getVideo(id: string) { return this.videos.get(id) ?? null; }
   remove(id: string) {
@@ -342,7 +370,7 @@ export class WmixEngine {
       this.paintBase(ctx, canvas, this.program);
       this.paintPip(ctx, canvas, this.overlay, this.pipLayout);
       if (this.fadeSnapshot) {
-        const progress = Math.min(1, (performance.now() - this.fadeStart) / this.fadeDuration);
+        const progress = this.manualFadeProgress ?? Math.min(1, (performance.now() - this.fadeStart) / this.fadeDuration);
         if (progress < 1) {
           ctx.globalAlpha = 1 - progress;
           const previous = this.fadeScene;
