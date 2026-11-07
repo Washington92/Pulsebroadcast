@@ -48,6 +48,7 @@ export default function App() {
   const [stagedScene, setStagedScene] = useState<ScenePreset | null>(null);
   const [stagedBase, setStagedBase] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  const [performanceMetrics, setPerformanceMetrics] = useState({ fps: 0, droppedFrames: 0 });
   const [recordBus, setRecordBus] = useState<"master" | "a" | "b">("master");
   const [error, setError] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -58,6 +59,7 @@ export default function App() {
     audio.onChange = setInputs;
     audio.setMaster(0.78, false);
     engine.onProgramChanged = setProgram;
+    engine.onPerformance = setPerformanceMetrics;
     engine.onRecordingStopped = failure => {
       setRecording(false);
       if (failure) setError(failure.message);
@@ -67,7 +69,7 @@ export default function App() {
       engine.attach(canvas.current);
       if (typeof canvas.current.captureStream === "function") setProgramStream(canvas.current.captureStream(30));
     }
-    return () => { engine.dispose(); audio.dispose(); };
+    return () => { engine.onPerformance = undefined; engine.dispose(); audio.dispose(); };
   }, [engine, audio]);
   function updatePipLayout(next: PipLayout) {
     engine.setPipLayout(next);
@@ -152,6 +154,7 @@ export default function App() {
   return <>
     <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRecord={toggleRecording} nativeRecording={recording} />
     <canvas ref={canvas} width={1280} height={720} className="pointer-events-none fixed -left-[9999px] top-0" aria-hidden="true" />
+    <div className="fixed bottom-3 right-3 z-[120] rounded border border-border bg-card/95 px-3 py-1 text-xs font-mono text-foreground shadow" role="status" aria-label="Desempenho de renderização">FPS {performanceMetrics.fps} · Frames estimados perdidos {performanceMetrics.droppedFrames}</div>
     {stagedScene && <div className="fixed right-3 top-16 z-[115] w-72 max-w-[90vw] rounded-lg border border-primary bg-card p-2 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground"><span>PREVIEW • {stagedScene.name}</span><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Fechar preview">✕</button></div><select aria-label="Câmera principal do Preview" value={stagedBase ?? ""} onChange={e => setStagedBase(e.target.value || null)} className="mb-2 w-full rounded border border-border bg-card p-1 text-xs text-foreground"><option value="">Escolha a câmera principal</option>{sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select><ScenePreview engine={engine} scene={stagedScene} sources={sources} baseId={stagedBase} /><p className="mt-1 text-[10px] text-muted-foreground">Prévia visual: câmera atual e PiP preparado. O Program permanece inalterado até TAKE.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => takeScene("cut")} className="flex-1 rounded bg-primary px-2 py-2 text-xs font-bold text-primary-foreground">CUT cena</button><button type="button" onClick={() => takeScene("fade")} className="flex-1 rounded bg-secondary px-2 py-2 text-xs font-bold text-foreground">FADE 500ms</button></div></div>}
     <div className="fixed bottom-12 right-3 z-[120] flex flex-wrap gap-2">
       <select aria-label="Fonte de sobreposição PiP" title="Segunda câmera sobre o Program" value={overlay} onChange={e => { engine.setOverlay(e.target.value || null); setOverlay(e.target.value); }} className="max-w-40 rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="">PiP: desligado</option>{sources.filter(source => source.id !== program).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select>
