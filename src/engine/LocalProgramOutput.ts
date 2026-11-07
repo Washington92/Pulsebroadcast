@@ -54,5 +54,9 @@ export class LocalProgramOutput {
     finally { await invoke("stop_program_bridge"); }
   }
 
+  async status(): Promise<string> {
+    return String(await nativeInvoke()("program_bridge_status"));
+  }
+
   get active(): boolean { return this.transport !== null; }
 }
