@@ -44,12 +44,25 @@ export default function App() {
     try { await audio.addMicrophone(selectedMicrophone || undefined); await refreshMicrophones(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
   async function toggleRecording() {
-    if (!recording) { engine.startRecording(audio.output()); setRecording(true); return; }
-    const blob = await engine.stopRecording(); setRecording(false);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a"); link.href = url;
-    link.download = `wmix-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
-    link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setError("");
+    try {
+      if (!recording) {
+        engine.startRecording(audio.output());
+        setRecording(true);
+        return;
+      }
+      const blob = await engine.stopRecording();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `wmix-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (recording) setRecording(false);
+    }
   }
   return <>
     <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRecord={toggleRecording} nativeRecording={recording} />
