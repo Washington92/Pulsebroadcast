@@ -9,7 +9,7 @@ import { cn } from "../../lib/utils";
 import { initialSources, type Source, type TransitionType } from "./data";
 
 const btn =
-  "inline-flex items-center justify-center gap-1.5 rounded border border-border bg-secondary px-2 text-xs text-secondary-foreground hover:bg-accent transition-colors";
+  "inline-flex items-center justify-center gap-1.5 rounded-md border border-border/70 bg-secondary/65 px-2 text-xs text-secondary-foreground hover:bg-accent/80 transition-colors";
 
 function LiveFrame({ stream, className }: { stream: MediaStream; className?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -300,44 +300,44 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const tabs = ["Preparar", "Editor", "Teleprompter", "Automações", "Ferramentas"];
 
   return (
-    <div className="flex h-screen min-h-[720px] min-w-[1200px] flex-col gap-2 overflow-hidden bg-background p-2 font-sans text-foreground">
+    <div className="flex h-screen min-h-[680px] min-w-[1100px] flex-col gap-1.5 overflow-hidden bg-background p-2 font-sans text-foreground">
       {obsError && <div role="alert" className="rounded bg-red-900 px-3 py-1 text-xs text-white">Falha no comando OBS: {obsError}</div>}
       {/* ===== Top bar ===== */}
-      <header className="flex h-10 shrink-0 items-center gap-2">
-        <div className="flex items-center gap-2 pr-2">
-          <div className="relative grid h-7 w-7 place-items-center rounded bg-primary">
-            <Play className="h-4 w-4 fill-primary-foreground text-primary-foreground" />
+      <header className="flex h-10 shrink-0 items-center gap-1.5 border-b border-border/60 pb-1">
+        <div className="flex items-center gap-2 border-r border-border/70 pr-3">
+          <div className="relative grid h-7 w-7 place-items-center rounded-md border border-border bg-secondary">
+            <Play className="h-4 w-4 fill-foreground text-foreground" />
             {streaming && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-tally-pgm" />}
           </div>
-          <span className="text-sm font-bold tracking-tight">wMix <span className="font-medium text-muted-foreground">Switcher</span></span>
+          <span className="text-sm font-bold tracking-tight">wMix</span>
           <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-bold",
             streaming ? "bg-tally-pgm text-destructive-foreground" : "border border-primary text-primary")}>
             {streaming ? "AO VIVO" : "PRONTO"}
           </span>
         </div>
-        <button className={cn(btn, "h-8 w-52 justify-between")}>
+        <button className={cn(btn, "h-8 w-24 justify-between")}>
           <span className="flex items-center gap-1.5"><FolderOpen className="h-3.5 w-3.5" />Show de lançamento</span>
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
         <nav className="flex gap-1">
           {tabs.map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              className={cn(btn, "h-8 px-4", tab === t && "border-primary/60 bg-accent text-foreground")}>{t}</button>
+              className={cn(btn, "h-8 px-2.5 text-[11px]", tab === t && "border-slate-500/60 bg-accent text-foreground")}>{t}</button>
           ))}
         </nav>
         <button onClick={() => setManual(!manual)}
-          className={cn(btn, "h-8 w-40", manual ? "border-warn text-warn" : "text-muted-foreground")}>
+          className={cn(btn, "h-8 w-32", manual ? "border-warn text-warn" : "text-muted-foreground")}>
           <Hand className="h-3.5 w-3.5" />{manual ? "Manual ativo" : "Assumir manual"}
         </button>
         <div className="ml-auto flex items-center gap-2">
-          <button className={cn(btn, "h-8 border-primary/60 bg-primary/10 px-5 text-primary")}><Sparkles className="h-3.5 w-3.5" />Copilot</button>
+          <button className={cn(btn, "h-8 border-border/70 bg-secondary/60 px-3 text-muted-foreground")}><Sparkles className="h-3.5 w-3.5" />Copilot</button>
           <button className={cn(btn, "h-8 w-8 px-0")} aria-label="Configurações"><Settings className="h-4 w-4" /></button>
           <button className={cn(btn, "h-8 w-44 justify-between")}><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Conta</span><ChevronDown className="h-3.5 w-3.5" /></button>
         </div>
       </header>
 
       {/* ===== Upper deck ===== */}
-      <section className="grid shrink-0 grid-cols-[minmax(0,1fr)_170px_minmax(0,1fr)_150px] gap-2">
+      <section className="grid shrink-0 grid-cols-[minmax(0,1fr)_164px_minmax(0,1fr)_130px] gap-2">
         {/* Preview */}
         <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-7 items-center gap-2 px-2 text-xs">
@@ -623,8 +623,8 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
       </section>
 
       {/* ===== Bottom bar ===== */}
-      <footer className="flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-2">
-        <button onClick={() => { if (nativeAdd) void nativeAdd().catch(e => setObsError(String(e))); else addInput(); }} className={cn(btn, "h-7 px-4")}><Plus className="h-3.5 w-3.5" />Adicionar input</button>
+      <footer className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-card px-2">
+        <button onClick={() => { if (nativeAdd) { try { void Promise.resolve(nativeAdd()).catch(e => setObsError(String(e))); } catch (e) { setObsError(String(e)); } } else addInput(); }} className={cn(btn, "h-7 px-4")}><Plus className="h-3.5 w-3.5" />Adicionar input</button>
         <div className="flex">
           <button onClick={() => { if (nativeRecord) { void nativeRecord().catch(e => setObsError(String(e))); } else if (obsConnected) { if (!obsToggleRecording || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleRecording().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoRecording(!demoRecording); }}
             className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", recording && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
