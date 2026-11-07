@@ -10,6 +10,18 @@ import { initialSources, type Source, type TransitionType } from "./data";
 const btn =
   "inline-flex items-center justify-center gap-1.5 rounded border border-border bg-secondary px-2 text-xs text-secondary-foreground hover:bg-accent transition-colors";
 
+function LiveFrame({ stream, className }: { stream: MediaStream; className?: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.srcObject = stream;
+    void el.play().catch(() => {});
+    return () => { el.srcObject = null; };
+  }, [stream]);
+  return <video ref={ref} autoPlay muted playsInline className={cn("h-full w-full object-contain bg-black", className)} />;
+}
+
 /* ---------- Video surface ---------- */
 function Frame({ s, className }: { s?: Source | undefined; className?: string }) {
   if (!s) return <div className={cn("bg-background", className)} />;
@@ -149,9 +161,9 @@ function Fader({ value, onChange, level, label }: { value: number; onChange: (n:
 const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
-export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
+export function Switcher({ nativeSources = [], nativeProgram = null, nativeCut, nativeRecord, nativeRecording = false, nativeAdd, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeCut?: (id: string) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [demoSources, setSources] = useState(initialSources);
-  const sources: Source[] = obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
+  const sources: Source[] = nativeSources.length ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [obsError, setObsError] = useState("");
   const [obsBusy, setObsBusy] = useState(false);
   const [programId, setProgramId] = useState(2);
@@ -165,7 +177,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
   const [view, setView] = useState<"Inputs" | "Mixer" | "Ambos">("Ambos");
   const [demoRecording, setDemoRecording] = useState(false);
   const [demoStreaming, setDemoStreaming] = useState(false);
-  const recording = obsConnected ? obsRecording : demoRecording;
+  const recording = nativeSources.length ? nativeRecording : obsConnected ? obsRecording : demoRecording;
   const streaming = obsConnected ? obsStreaming : demoStreaming;
   const [elapsed, setElapsed] = useState(0);
   const [clock, setClock] = useState("--:--:--");
@@ -176,8 +188,10 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
   const [manual, setManual] = useState(false);
   const animRef = useRef<number | null>(null);
 
-  const currentProgramId = obsConnected ? (sources.find(s => s.name === obsProgram)?.id ?? 0) : programId;
+  const currentProgramId = nativeSources.length ? (nativeSources.findIndex(s => s.id === nativeProgram) + 1) : obsConnected ? (sources.find(s => s.name === obsProgram)?.id ?? 0) : programId;
   const currentPreviewId = obsConnected && obsPreview ? (sources.find(s => s.name === obsPreview)?.id ?? previewId) : previewId;
+  const liveStream = (id: number) => nativeSources[id - 1]?.stream;
+  const renderFrame = (source?: Source, className?: string) => source && nativeSources.length && liveStream(source.id) ? <LiveFrame stream={liveStream(source.id)!} className={className} /> : <Frame s={source} className={className} />;
   const pgm = sources.find((s) => s.id === currentProgramId);
   const pvw = sources.find((s) => s.id === currentPreviewId);
   const levels = useMeters(sources);
@@ -199,6 +213,11 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
   }, [previewId, programId]);
 
   const cut = useCallback(() => {
+    if (nativeSources.length && nativeCut) {
+      const source = nativeSources[previewId - 1];
+      if (source) { nativeCut(source.id); setPreviewId(currentProgramId || previewId); }
+      return;
+    }
     if (obsConnected) {
       const scene = sources.find(s => s.id === (obsPreview ? currentPreviewId : previewId))?.name;
       if (!scene || !obsTake || obsBusy) return;
@@ -208,9 +227,10 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
     }
     if (animRef.current) cancelAnimationFrame(animRef.current);
     complete();
-  }, [complete, obsConnected, obsTake, obsBusy, previewId, currentPreviewId, obsPreview, sources]);
+  }, [complete, obsConnected, obsTake, obsBusy, previewId, currentPreviewId, obsPreview, sources, nativeSources, nativeCut, currentProgramId]);
 
   const auto = useCallback(() => {
+    if (nativeSources.length && nativeCut) { const source = nativeSources[previewId - 1]; if (source) nativeCut(source.id); return; }
     if (obsConnected) {
       const scene = sources.find(s => s.id === previewId)?.name;
       if (!scene || !obsTake || obsBusy) return;
@@ -231,7 +251,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
       }
     };
     animRef.current = requestAnimationFrame(step);
-  }, [durations, transition, complete, obsConnected, obsTake, obsBusy, previewId, sources]);
+  }, [durations, transition, complete, obsConnected, obsTake, obsBusy, previewId, sources, nativeSources, nativeCut]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -322,7 +342,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
             <span className="font-mono text-muted-foreground">{previewId}</span><span className="font-medium">{pvw?.name}</span>
           </div>
           <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
-            <Frame s={pvw} />
+            {renderFrame(pvw)}
           </div>
           <Transport {...pvwHead} remaining={pvw?.remaining || "--"}
             extra={<>{["IN", "OUT", "CUE"].map((x) => <button key={x} className={cn(btn, "h-6 px-1.5 text-[10px] font-semibold")}>{x}</button>)}</>} />
@@ -404,7 +424,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
             {streaming && <span className="ml-auto animate-pulse text-[10px] font-bold text-tally-pgm">● NO AR</span>}
           </div>
           <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
-            <Frame s={pgm} className="absolute inset-0" />
+            {renderFrame(pgm, "absolute inset-0")}
             {progress > 0 && <div className="absolute inset-0" style={incoming}><Frame s={pvw} /></div>}
             <LowerThird show={titleOnAir} />
             <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
@@ -419,7 +439,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
             {pgm?.img ? (
               <img src={pgm.img} alt="" className="h-full w-full object-cover" draggable={false}
                 style={{ filter: pgm.filter, objectPosition: vMode === "track" ? `${30 + (pgmHead.pos % 40)}% 50%` : vMode === "safe" ? "20% 50%" : "50% 50%" }} />
-            ) : <Frame s={pgm} className="h-full" />}
+            ) : {renderFrame(pgm, "h-full")}}
             {vMode === "safe" && <div className="absolute inset-[8%_6%_14%] rounded border border-dashed border-primary/70" />}
             <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
           </div>
@@ -468,9 +488,9 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
                     className={cn("rounded-md border bg-card p-1 transition-shadow",
                       isPgm ? "glow-pgm border-transparent" : isPvw ? "glow-pvw border-transparent" : "border-border")}>
                     <button className="relative block aspect-video w-full overflow-hidden rounded-sm bg-background"
-                      onClick={() => { setPreviewId(s.id); if (obsConnected && obsPrepare) void obsPrepare(s.name).catch(e => setObsError(String(e))); }} onDoubleClick={() => { if (!obsConnected) { setPreviewId(s.id); setTimeout(cut, 0); } else if (obsTake && !obsBusy) { setObsBusy(true); void obsTake(s.name, "cut", 0).catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } }}
+                      onClick={() => { setPreviewId(s.id); if (obsConnected && obsPrepare) void obsPrepare(s.name).catch(e => setObsError(String(e))); }} onDoubleClick={() => { if (nativeSources.length && nativeCut) { nativeCut(nativeSources[s.id - 1].id); } else if (!obsConnected) { setPreviewId(s.id); setTimeout(cut, 0); } else if (obsTake && !obsBusy) { setObsBusy(true); void obsTake(s.name, "cut", 0).catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } }}
                       title="Clique: preview · Duplo clique: corte">
-                      <Frame s={s} />
+                      {renderFrame(s)}
                       {s.remaining && <span className="absolute bottom-0.5 right-1 rounded bg-background/80 px-1 font-mono text-[9px] font-bold">{s.remaining}</span>}
                       <div className="absolute bottom-0 left-0 h-0.5 bg-primary" style={{ width: `${(levels[s.id] ?? 0) * 100}%` }} />
                     </button>
@@ -552,9 +572,9 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
 
       {/* ===== Bottom bar ===== */}
       <footer className="flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-2">
-        <button onClick={addInput} className={cn(btn, "h-7 px-4")}><Plus className="h-3.5 w-3.5" />Adicionar input</button>
+        <button onClick={() => { if (nativeAdd) void nativeAdd().catch(e => setObsError(String(e))); else addInput(); }} className={cn(btn, "h-7 px-4")}><Plus className="h-3.5 w-3.5" />Adicionar input</button>
         <div className="flex">
-          <button onClick={() => { if (obsConnected) { if (!obsToggleRecording || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleRecording().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoRecording(!demoRecording); }}
+          <button onClick={() => { if (nativeRecord) { void nativeRecord().catch(e => setObsError(String(e))); } else if (obsConnected) { if (!obsToggleRecording || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleRecording().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoRecording(!demoRecording); }}
             className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", recording && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
             <span className={cn("h-2 w-2 rounded-full bg-tally-pgm", recording && "animate-pulse bg-destructive-foreground")} />
             {recording ? `Gravando ${fmtElapsed(elapsed)}` : "Gravar"}
@@ -562,7 +582,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
           <button className={cn(btn, "h-7 rounded-l-none border-l-0 px-3")}>H <ChevronDown className="h-3 w-3" /></button>
         </div>
         <div className="flex">
-          <button onClick={() => { if (obsConnected) { if (!obsToggleStreaming || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleStreaming().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoStreaming(!demoStreaming); }}
+          <button onClick={() => { if (nativeSources.length) { setObsError("Transmissão RTMP ainda não implementada no wMix Engine."); } else if (obsConnected) { if (!obsToggleStreaming || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleStreaming().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoStreaming(!demoStreaming); }}
             className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", streaming && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
             <Radio className="h-3.5 w-3.5" />{streaming ? "Encerrar" : "Transmitir"}
           </button>
