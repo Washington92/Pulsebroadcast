@@ -54,6 +54,7 @@ export default function App() {
   const [recordBus, setRecordBus] = useState<"master" | "a" | "b">("master");
   const [error, setError] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
+  const projectFile = useRef<HTMLInputElement>(null);
   const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
     engine.onSourcesChanged = () => { setSources(engine.list()); setOverlay(engine.currentOverlay() ?? ""); };
@@ -89,6 +90,43 @@ export default function App() {
     const normalized = engine.currentPipLayout();
     setPipLayout(normalized);
     try { localStorage.setItem("wmix-pip-layout", JSON.stringify(normalized)); } catch { /* storage optional */ }
+  }
+  function exportProject() {
+    const project = {
+      format: "wmix-project", version: 1,
+      savedAt: new Date().toISOString(),
+      scenes: presets, pipLayout,
+      sources: sources.map(source => ({ name: source.name, kind: source.kind })),
+      note: "Dispositivos de captura não são reabertos automaticamente ao importar.",
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(project, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "projeto-wmix.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setError("");
+  }
+  async function importProject(file?: File) {
+    if (!file) return;
+    try {
+      if (file.size > 1024 * 1024) throw new Error("Arquivo de projeto muito grande (máximo 1 MB).");
+      const value: unknown = JSON.parse(await file.text());
+      if (!value || typeof value !== "object") throw new Error("Projeto inválido.");
+      const project = value as Record<string, unknown>;
+      if (project.format !== "wmix-project" || project.version !== 1 || !Array.isArray(project.scenes)) throw new Error("Formato de projeto incompatível.");
+      const layout = project.pipLayout as PipLayout | undefined;
+      if (!layout || ![layout.x, layout.y, layout.width].every(n => typeof n === "number" && Number.isFinite(n))) throw new Error("Layout PiP inválido.");
+      const scenes = project.scenes as ScenePreset[];
+      if (scenes.length > 20 || !scenes.every(p => p && typeof p.name === "string" && p.name.length <= 40 && p.layout && [p.layout.x, p.layout.y, p.layout.width].every(n => typeof n === "number" && Number.isFinite(n)) && (p.overlayName === null || typeof p.overlayName === "string") && (p.baseName == null || typeof p.baseName === "string"))) throw new Error("Cenas inválidas.");
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(scenes));
+      setPresets(scenes);
+      updatePipLayout(layout);
+      setStagedScene(null);
+      setSelectedPreset("");
+      setError("Projeto importado: cenas e layout restaurados. Reconecte as fontes de vídeo manualmente.");
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (projectFile.current) projectFile.current.value = ""; }
   }
   function saveScene() {
     const name = presetName.trim().slice(0, 40);
@@ -198,6 +236,9 @@ export default function App() {
       {overlay && <div className="flex items-center gap-2 rounded border border-border bg-card px-2 text-xs text-foreground">{(["x", "y", "width"] as const).map(key => <label key={key} className="flex items-center gap-1">{key === "width" ? "Tamanho" : key.toUpperCase()}<input type="range" aria-label={`PiP ${key}`} min="0" max={key === "width" ? "80" : "90"} value={Math.round(pipLayout[key] * 100)} onChange={e => updatePipLayout({ ...pipLayout, [key]: Number(e.target.value) / 100 })} className="w-16 accent-primary" /></label>)}</div>}
       <div className="flex items-center gap-1 rounded border border-border bg-card px-1"><input aria-label="Nome da cena" placeholder="Nome da cena" value={presetName} onChange={e => setPresetName(e.target.value)} maxLength={40} className="w-28 bg-card p-1 text-xs text-foreground" /><button type="button" onClick={saveScene} className="rounded bg-secondary px-2 py-1 text-xs text-foreground">Salvar cena</button><select aria-label="Carregar cena salva" value={selectedPreset} onChange={e => loadScene(e.target.value)} className="max-w-32 bg-card p-1 text-xs text-foreground"><option value="">Cenas salvas</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select>{stagedScene && <><span role="status" className="max-w-44 truncate px-1 text-xs text-foreground" title={stagedScene.name}>PREVIEW: {stagedScene.name}</span><button type="button" onClick={() => takeScene("cut")} className="rounded bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">TAKE cena</button><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Cancelar preparação da cena" className="rounded bg-secondary px-2 py-1 text-xs text-foreground">Cancelar</button></>}</div>
       <select aria-label="Áudio da gravação" title="Selecione o barramento usado na gravação" value={recordBus} disabled={recording} onChange={e => setRecordBus(e.target.value as "master" | "a" | "b")} className="rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="master">REC: MASTER</option><option value="a">REC: BUS A</option><option value="b">REC: BUS B</option></select>
+      <input ref={projectFile} type="file" accept=".json,application/json" className="hidden" aria-label="Arquivo de projeto wMix" onChange={e => void importProject(e.target.files?.[0])} />
+      <button type="button" onClick={exportProject} className="rounded border border-border bg-card px-2 py-2 text-xs text-foreground">Salvar projeto</button>
+      <button type="button" onClick={() => projectFile.current?.click()} className="rounded border border-border bg-card px-2 py-2 text-xs text-foreground">Abrir projeto</button>
       <button onClick={() => void addCamera()} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Câmera real</button>
       <button onClick={() => void addScreen()} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Capturar tela</button>
       <select aria-label="Saída de pré-escuta" defaultValue="" onFocus={() => void refreshMicrophones()} onChange={e => { if (e.target.value) void audio.setCueOutput(e.target.value).catch(err => setError(String(err))); }} className="max-w-40 rounded border border-border bg-card p-2 text-xs text-foreground">
