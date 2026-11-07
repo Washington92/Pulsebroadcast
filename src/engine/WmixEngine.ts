@@ -6,6 +6,7 @@ export class WmixEngine {
   private canvas: HTMLCanvasElement | null = null;
   private frame = 0;
   private program: string | null = null;
+  private overlay: string | null = null;
   private fadeFrom: string | null = null;
   private fadeStart = 0;
   private fadeDuration = 0;
@@ -16,6 +17,12 @@ export class WmixEngine {
   onProgramChanged?: (id: string | null) => void;
   list() { return [...this.sources.values()]; }
   currentProgram() { return this.program; }
+  currentOverlay() { return this.overlay; }
+  setOverlay(id: string | null) {
+    if (id !== null && !this.sources.has(id)) throw new Error("Fonte de overlay inexistente");
+    this.overlay = id;
+    this.onSourcesChanged?.();
+  }
   attach(canvas: HTMLCanvasElement) { this.canvas = canvas; this.draw(); }
   async addCamera(deviceId?: string) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
@@ -57,6 +64,7 @@ export class WmixEngine {
     this.sources.delete(id); this.videos.delete(id);
     source.stream.getTracks().forEach(track => track.stop());
     if (this.fadeFrom === id) this.fadeFrom = null;
+    if (this.overlay === id) this.overlay = null;
     if (this.program === id) { this.program = this.sources.keys().next().value ?? null; this.onProgramChanged?.(this.program); }
     this.onSourcesChanged?.();
   }
@@ -81,6 +89,23 @@ export class WmixEngine {
         paint(video, fadeProgress);
       }
       if (fadeProgress >= 1) this.fadeFrom = null;
+      // Independent picture-in-picture layer composited into the Program recording.
+      const overlayVideo = this.overlay ? this.videos.get(this.overlay) : null;
+      if (overlayVideo && overlayVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && overlayVideo.videoWidth) {
+        const margin = canvas.width * 0.025;
+        const boxWidth = canvas.width * 0.29;
+        const boxHeight = boxWidth * 9 / 16;
+        const x = canvas.width - boxWidth - margin;
+        const y = canvas.height - boxHeight - margin;
+        ctx.fillStyle = '#05070b';
+        ctx.fillRect(x - 3, y - 3, boxWidth + 6, boxHeight + 6);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, boxWidth, boxHeight); ctx.clip();
+        const scale = Math.max(boxWidth / overlayVideo.videoWidth, boxHeight / overlayVideo.videoHeight);
+        const w = overlayVideo.videoWidth * scale, h = overlayVideo.videoHeight * scale;
+        ctx.drawImage(overlayVideo, x + (boxWidth - w) / 2, y + (boxHeight - h) / 2, w, h);
+        ctx.restore();
+      }
     }
     this.frame = requestAnimationFrame(this.draw);
   };
