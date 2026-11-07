@@ -1,12 +1,13 @@
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use tauri::State;
+use tauri::{State, AppHandle};
+use crate::encoder_path::ffmpeg_path;
 use crate::output_manager::{OutputManager, OutputState};
 
 /// Checks for a local FFmpeg executable. This does not start a broadcast.
 #[tauri::command]
-pub fn probe_encoder() -> Result<String, String> {
-    let output = Command::new("ffmpeg")
+pub fn probe_encoder(app: AppHandle) -> Result<String, String> {
+    let output = Command::new(ffmpeg_path(&app)?)
         .arg("-version")
         .output()
         .map_err(|_| "FFmpeg não encontrado no PATH. A transmissão nativa ainda não está disponível.".to_string())?;
@@ -38,6 +39,7 @@ pub fn validate_rtmp_destination(url: String, video_bitrate_kbps: u32) -> Result
 /// production stream keys in operating-system process command lines.
 #[tauri::command]
 pub fn start_synthetic_stream(
+    app: AppHandle,
     manager: State<'_, OutputManager>,
     url: String,
     video_bitrate_kbps: u32,
