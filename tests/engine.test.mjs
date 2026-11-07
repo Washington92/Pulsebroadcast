@@ -35,7 +35,7 @@ function harness() {
     navigator: {
       mediaDevices: {
         getUserMedia: async () => {
-          const track = { label: "Camera " + (serial + 1), stop() {}, addEventListener() {} };
+          const track = { label: "Camera " + (serial + 1), stop() {}, addEventListener(type, callback) { if (type === "ended") this.onEnded = callback; } };
           tracks.push(track);
           const stream = { getVideoTracks: () => [track], getTracks: () => [track] };
           streams.push(stream);
@@ -49,7 +49,7 @@ function harness() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   vm.runInNewContext(compiled, context, { filename: "WmixEngine.js" });
-  return { engine: new context.exports.WmixEngine(), canvas, calls, advance(ms) { clock += ms; } };
+  return { engine: new context.exports.WmixEngine(), canvas, calls, tracks, advance(ms) { clock += ms; } };
 }
 
 test("CUT replaces Program and cancels an active FADE", async () => {
@@ -154,5 +154,31 @@ test("Preview and Program can render distinct camera feeds simultaneously", asyn
   assert.ok(calls.draw - before >= 4, "Both monitors should render base and PiP");
   assert.equal(engine.currentProgram(), first);
   assert.equal(engine.currentPreviewScene().base, third);
+  engine.dispose();
+});
+
+test("Camera disconnect removes its source and safely switches Program", async () => {
+  const { engine, canvas, tracks } = harness();
+  engine.attach(canvas());
+  const first = await engine.addCamera();
+  const second = await engine.addCamera();
+  tracks[0].onEnded();
+  assert.equal(engine.currentProgram(), second);
+  assert.equal(engine.list().length, 1);
+  assert.doesNotThrow(() => tracks[0].onEnded());
+  assert.equal(engine.currentProgram(), second);
+  engine.dispose();
+});
+
+test("Disconnecting an overlay clears PiP without removing Program", async () => {
+  const { engine, canvas, tracks } = harness();
+  engine.attach(canvas());
+  const first = await engine.addCamera();
+  const second = await engine.addCamera();
+  engine.setOverlay(second);
+  tracks[1].onEnded();
+  assert.equal(engine.currentOverlay(), null);
+  assert.equal(engine.currentProgram(), first);
+  assert.doesNotThrow(() => engine.draw());
   engine.dispose();
 });
