@@ -1,5 +1,5 @@
 /** Independent wMix audio bus based on the Web Audio API. No OBS code or process. */
-export type AudioInput = { id: string; name: string; stream: MediaStream; volume: number; muted: boolean; cue: boolean; level: number };
+export type AudioInput = { id: string; name: string; stream: MediaStream; volume: number; muted: boolean; cue: boolean; busA: boolean; busB: boolean; level: number };
 type Channel = { input: AudioInput; source: MediaStreamAudioSourceNode; gain: GainNode; analyser: AnalyserNode; samples: Float32Array<ArrayBuffer> };
 export class WmixAudioEngine {
   private context: AudioContext | null = null;
@@ -12,9 +12,13 @@ export class WmixAudioEngine {
   private cueMonitor: HTMLAudioElement | null = null;
   private cueGains = new Map<string, GainNode>();
   private raf = 0;
+  private lastMeterEmit = 0;
+  private busDestinations: Record<"a" | "b", MediaStreamAudioDestinationNode> | null = null;
+  private busMasters: Record<"a" | "b", GainNode> | null = null;
+  private busSends = new Map<string, { a: GainNode; b: GainNode }>();
   onChange?: (inputs: AudioInput[]) => void;
   private ensureContext() {
-    if (!this.context) { this.context = new AudioContext(); this.destination = this.context.createMediaStreamDestination(); this.cueDestination = this.context.createMediaStreamDestination(); this.masterGain = this.context.createGain(); this.masterGain.gain.value = this.masterVolume; this.masterGain.connect(this.destination); }
+    if (!this.context) { this.context = new AudioContext(); this.destination = this.context.createMediaStreamDestination(); this.cueDestination = this.context.createMediaStreamDestination(); this.masterGain = this.context.createGain(); this.masterGain.gain.value = this.masterVolume; this.masterGain.connect(this.destination); this.busDestinations = { a: this.context.createMediaStreamDestination(), b: this.context.createMediaStreamDestination() }; this.busMasters = { a: this.context.createGain(), b: this.context.createGain() }; this.busMasters.a.gain.value = 0.7; this.busMasters.b.gain.value = 0.7; this.busMasters.a.connect(this.busDestinations.a); this.busMasters.b.connect(this.busDestinations.b); }
     void this.context.resume();
     return this.context;
   }
@@ -35,7 +39,12 @@ export class WmixAudioEngine {
     const cueGain = ctx.createGain(); cueGain.gain.value = 0;
     analyser.connect(cueGain); cueGain.connect(this.cueDestination!);
     this.cueGains.set(id, cueGain);
-    const input: AudioInput = { id, name: stream.getAudioTracks()[0].label || "Microfone", stream, volume: 1, muted: false, cue: false, level: 0 };
+    const sendA = ctx.createGain(); const sendB = ctx.createGain();
+    sendA.gain.value = 0; sendB.gain.value = 0;
+    gain.connect(sendA); gain.connect(sendB);
+    sendA.connect(this.busMasters!.a); sendB.connect(this.busMasters!.b);
+    this.busSends.set(id, { a: sendA, b: sendB });
+    const input: AudioInput = { id, name: stream.getAudioTracks()[0].label || "Microfone", stream, volume: 1, muted: false, cue: false, busA: false, busB: false, level: 0 };
     this.channels.set(id, { input, source, gain, analyser, samples: new Float32Array(new ArrayBuffer(analyser.fftSize * 4)) });
     stream.getAudioTracks().forEach(t => t.addEventListener("ended", () => this.remove(id), { once: true }));
     if (!this.raf) this.measure();
@@ -56,6 +65,18 @@ export class WmixAudioEngine {
     this.masterVolume = Math.max(0, Math.min(1, volume));
     this.masterMuted = muted;
     if (this.masterGain && this.context) this.masterGain.gain.setTargetAtTime(muted ? 0 : this.masterVolume, this.context.currentTime, 0.01);
+  }
+  busOutput(bus: "a" | "b") { return this.busDestinations?.[bus].stream ?? null; }
+  setBusVolume(bus: "a" | "b", volume: number) {
+    if (!this.busMasters || !this.context) return;
+    this.busMasters[bus].gain.setTargetAtTime(Math.max(0, Math.min(1, volume)), this.context.currentTime, 0.01);
+  }
+  setBusSend(id: string, bus: "a" | "b", enabled: boolean) {
+    const channel = this.channels.get(id); const sends = this.busSends.get(id);
+    if (!channel || !sends || !this.context) return;
+    channel.input[bus === "a" ? "busA" : "busB"] = enabled;
+    sends[bus].gain.setTargetAtTime(enabled ? 1 : 0, this.context.currentTime, 0.01);
+    this.emit();
   }
   async enableCueMonitor() {
     this.ensureContext();
@@ -87,6 +108,7 @@ export class WmixAudioEngine {
     this.channels.delete(id);
     ch.source.disconnect(); ch.analyser.disconnect(); ch.gain.disconnect();
     this.cueGains.get(id)?.disconnect(); this.cueGains.delete(id);
+    const sends = this.busSends.get(id); sends?.a.disconnect(); sends?.b.disconnect(); this.busSends.delete(id);
     ch.input.stream.getTracks().forEach(t => t.stop()); this.emit();
   }
   private emit() { this.onChange?.(this.list()); }
@@ -96,13 +118,13 @@ export class WmixAudioEngine {
       let sum = 0; for (const sample of ch.samples) sum += sample * sample;
       ch.input.level = Math.min(1, Math.sqrt(sum / ch.samples.length) * 3);
     }
-    if (this.channels.size) { this.emit(); this.raf = requestAnimationFrame(this.measure); }
+    if (this.channels.size) { const now = performance.now(); if (now - this.lastMeterEmit >= 66) { this.lastMeterEmit = now; this.emit(); } this.raf = requestAnimationFrame(this.measure); }
     else this.raf = 0;
   };
   dispose() {
     cancelAnimationFrame(this.raf); this.raf = 0;
     for (const id of [...this.channels.keys()]) this.remove(id);
     if (this.cueMonitor) { this.cueMonitor.pause(); this.cueMonitor.srcObject = null; this.cueMonitor = null; }
-    void this.context?.close(); this.context = null; this.destination = null; this.cueDestination = null; this.masterGain = null;
+    void this.context?.close(); this.context = null; this.destination = null; this.cueDestination = null; this.masterGain = null; this.busDestinations = null; this.busMasters = null; this.busSends.clear();
   }
 }
