@@ -6,6 +6,9 @@ export class WmixEngine {
   private canvas: HTMLCanvasElement | null = null;
   private frame = 0;
   private program: string | null = null;
+  private fadeFrom: string | null = null;
+  private fadeStart = 0;
+  private fadeDuration = 0;
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   onSourcesChanged?: () => void;
@@ -38,12 +41,21 @@ export class WmixEngine {
     if (!this.sources.has(id)) throw new Error('Fonte inexistente');
     this.program = id; this.onProgramChanged?.(id);
   }
+  transitionTo(id: string, durationMs = 500) {
+    if (!this.sources.has(id)) throw new Error("Fonte inexistente");
+    if (id === this.program) return;
+    this.fadeFrom = this.program;
+    this.fadeStart = performance.now();
+    this.fadeDuration = Math.max(1, durationMs);
+    this.setProgram(id);
+  }
   getVideo(id: string) { return this.videos.get(id) ?? null; }
   remove(id: string) {
     const source = this.sources.get(id);
     if (!source) return;
     this.sources.delete(id); this.videos.delete(id);
     source.stream.getTracks().forEach(track => track.stop());
+    if (this.fadeFrom === id) this.fadeFrom = null;
     if (this.program === id) { this.program = this.sources.keys().next().value ?? null; this.onProgramChanged?.(this.program); }
     this.onSourcesChanged?.();
   }
@@ -54,11 +66,20 @@ export class WmixEngine {
     if (ctx) {
       ctx.fillStyle = '#080c13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
       const video = this.program ? this.videos.get(this.program) : null;
+      const paint = (v: HTMLVideoElement, alpha = 1) => {
+        const scale = Math.min(canvas.width / v.videoWidth, canvas.height / v.videoHeight);
+        const w = v.videoWidth * scale, h = v.videoHeight * scale;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(v, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+        ctx.globalAlpha = 1;
+      };
+      const fadeProgress = this.fadeFrom ? Math.min(1, (performance.now() - this.fadeStart) / this.fadeDuration) : 1;
+      const previous = this.fadeFrom ? this.videos.get(this.fadeFrom) : null;
+      if (fadeProgress < 1 && previous?.readyState && previous.videoWidth) paint(previous);
       if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth) {
-        const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
-        const w = video.videoWidth * scale, h = video.videoHeight * scale;
-        ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+        paint(video, fadeProgress);
       }
+      if (fadeProgress >= 1) this.fadeFrom = null;
     }
     this.frame = requestAnimationFrame(this.draw);
   };
