@@ -125,7 +125,22 @@ export default function App() {
   }
   async function addCamera() {
     setError("");
-    try { await engine.addCamera(selectedCamera || undefined); await refreshMicrophones(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const available = devices.filter(device => device.kind === "videoinput");
+      setCameras(available);
+      if (!available.length) { setError("Nenhuma câmera detectada. Conecte uma webcam USB ou habilite a câmera no Windows e tente novamente."); return; }
+      const deviceId = available.some(device => device.deviceId === selectedCamera) ? selectedCamera : "";
+      if (selectedCamera && !deviceId) setSelectedCamera("");
+      await engine.addCamera(deviceId || undefined);
+      await refreshMicrophones();
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") setError("Câmera não encontrada. Confira se está conectada e selecione uma câmera disponível.");
+      else if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") setError("Acesso à câmera negado. Verifique as permissões de câmera do Windows.");
+      else if (err.name === "NotReadableError" || err.name === "TrackStartError") setError("A câmera não pôde ser aberta. Feche outros aplicativos que possam estar utilizando o dispositivo.");
+      else setError(err.message);
+    }
   }
   async function reconnectProgramCamera() {
     if (!program || sources.find(source => source.id === program)?.kind !== "camera") { setError("Selecione uma câmera no Program (não uma captura de tela)."); return; }
