@@ -4,6 +4,8 @@
 use std::io::Write;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
+use tauri::AppHandle;
+use crate::encoder_path::ffmpeg_path;
 
 #[derive(Default)]
 pub struct ProgramBridge(pub Mutex<BridgeSession>);
@@ -25,11 +27,11 @@ fn is_loopback_rtmp(url: &str) -> bool {
 }
 
 impl BridgeSession {
-    fn start(&mut self, url: &str, bitrate_kbps: u32) -> Result<(), String> {
+    fn start(&mut self, encoder: &std::path::Path, url: &str, bitrate_kbps: u32) -> Result<(), String> {
         if self.child.is_some() { return Err("A ponte Program já está ativa".into()); }
         if !is_loopback_rtmp(url) { return Err("A ponte experimental aceita somente RTMP local sem chave real".into()); }
         if !(500..=50_000).contains(&bitrate_kbps) { return Err("Bitrate inválido".into()); }
-        let mut child = Command::new("ffmpeg")
+        let mut child = Command::new(encoder)
             .args([
                 "-hide_banner", "-nostdin", "-loglevel", "error",
                 "-f", "webm", "-i", "pipe:0",
@@ -103,10 +105,10 @@ impl Drop for BridgeSession {
 
 #[tauri::command]
 pub fn start_program_bridge(
-    bridge: tauri::State<'_, ProgramBridge>, url: String, video_bitrate_kbps: u32,
+    app: AppHandle, bridge: tauri::State<'_, ProgramBridge>, url: String, video_bitrate_kbps: u32,
 ) -> Result<(), String> {
     let mut session = bridge.0.lock().map_err(|_| "Ponte Program indisponível")?;
-    session.start(&url, video_bitrate_kbps)
+    session.start(&ffmpeg_path(&app)?, &url, video_bitrate_kbps)
 }
 
 #[tauri::command]
