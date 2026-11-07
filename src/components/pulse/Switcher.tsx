@@ -559,6 +559,13 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                     className={cn(btn, "h-6 w-full", input.cue && "border-warn bg-warn text-primary-foreground")}>
                     <Headphones className="h-3 w-3" /> {input.cue ? "CUE ON" : "CUE"}
                   </button>
+                  <div className="w-full" title={`Pico: ${(20 * Math.log10(Math.max(input.peak, 0.00001))).toFixed(1)} dBFS`}>
+                    <div className="h-1.5 w-full overflow-hidden rounded bg-secondary">
+                      <div className={cn("h-full transition-[width] duration-75", input.clipping ? "bg-destructive" : input.peak > 0.85 ? "bg-warn" : "bg-primary")}
+                        style={{ width: `${Math.min(100, input.peak * 100)}%` }} />
+                    </div>
+                    <span className={cn("text-[9px] font-mono", input.clipping ? "text-destructive font-bold" : "text-muted-foreground")}>{input.clipping ? "CLIP!" : `${(20 * Math.log10(Math.max(input.peak, 0.00001))).toFixed(0)} dBFS`}</span>
+                  </div>
                   <Fader label={input.name} value={Math.round(input.volume * 100)}
                     onChange={value => nativeAudioVolume?.(input.id, value / 100)} level={input.muted ? 0 : input.level} />
                   <span className="font-mono text-[9px] text-muted-foreground">{toDb(Math.round(input.volume * 100))} dB</span>
