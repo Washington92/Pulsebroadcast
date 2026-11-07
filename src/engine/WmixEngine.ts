@@ -37,6 +37,14 @@ export class WmixEngine {
   onProgramChanged?: (id: string | null) => void;
   list() { return [...this.sources.values()]; }
   currentProgram() { return this.program; }
+  renameSource(id: string, name: string) {
+    const source = this.sources.get(id);
+    if (!source) throw new Error("Input não encontrado");
+    const next = name.trim().slice(0, 60);
+    if (!next) throw new Error("Informe um nome para o input");
+    source.name = next;
+    this.onSourcesChanged?.();
+  }
   isTransitioning() { return this.fadeSnapshot !== null; }
   currentPreviewScene() { return this.previewScene ? { ...this.previewScene, layout: { ...this.previewScene.layout } } : null; }
   currentOverlay() { return this.overlay; }
