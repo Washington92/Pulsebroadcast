@@ -24,20 +24,13 @@ jobs:
           workspaces: src-tauri -> target
       - run: npm install --no-audit --no-fund
       - run: npm test
-      - name: Generate temporary Windows icon
-        shell: pwsh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate official wMix Windows icon
         run: |
-          New-Item -ItemType Directory -Force src-tauri/icons | Out-Null
-          Add-Type -AssemblyName System.Drawing
-          $bitmap = New-Object System.Drawing.Bitmap(64, 64)
-          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-          $graphics.Clear([System.Drawing.Color]::FromArgb(12, 18, 32))
-          $font = New-Object System.Drawing.Font("Arial", 22, [System.Drawing.FontStyle]::Bold)
-          $brush = [System.Drawing.Brushes]::White
-          $graphics.DrawString("wM", $font, $brush, 3, 12)
-          $icon = [System.Drawing.Icon]::FromHandle($bitmap.GetHicon())
-          $file = [System.IO.File]::Create("src-tauri/icons/icon.ico")
-          try { $icon.Save($file) } finally { $file.Dispose(); $icon.Dispose(); $graphics.Dispose(); $font.Dispose(); $bitmap.Dispose() }
+          python -m pip install pillow
+          python scripts/generate_wmix_icon.py
       - run: npm run tauri build
       - uses: actions/upload-artifact@v4
         with:
