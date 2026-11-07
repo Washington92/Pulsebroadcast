@@ -7,7 +7,7 @@ out = Path("src-tauri/icons")
 out.mkdir(parents=True, exist_ok=True)
 image = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
 draw = ImageDraw.Draw(image)
-draw.rounded_rectangle((8, 8, 504, 504), radius=110, fill="#050505")
+draw.rounded_rectangle((8, 8, 504, 504), radius=65, fill="#050505")
 font_path = Path("C:/Windows/Fonts/arialbd.ttf")
 font = ImageFont.truetype(str(font_path), 142)
 label = "wMix"
