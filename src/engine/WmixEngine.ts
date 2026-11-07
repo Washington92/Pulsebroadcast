@@ -8,6 +8,12 @@ export class WmixEngine {
   private previewCanvas: HTMLCanvasElement | null = null;
   private previewScene: { base: string | null; overlay: string | null; layout: PipLayout } | null = null;
   private frame = 0;
+  private frameWindowStart = 0;
+  private frameCount = 0;
+  private droppedFrames = 0;
+  private lastFrameAt = 0;
+  private measuredFps = 0;
+  onPerformance?: (metrics: { fps: number; droppedFrames: number }) => void;
   private program: string | null = null;
   private overlay: string | null = null;
   private pipLayout: PipLayout = { x: 0.685, y: 0.68, width: 0.29 };
@@ -155,6 +161,17 @@ export class WmixEngine {
     this.onSourcesChanged?.();
   }
   private draw = () => {
+    const now = performance.now();
+    if (!this.frameWindowStart) this.frameWindowStart = now;
+    if (this.lastFrameAt && now - this.lastFrameAt > 50) this.droppedFrames += Math.max(0, Math.floor((now - this.lastFrameAt) / (1000 / 30)) - 1);
+    this.lastFrameAt = now;
+    this.frameCount++;
+    if (now - this.frameWindowStart >= 1000) {
+      this.measuredFps = Math.round(this.frameCount * 1000 / (now - this.frameWindowStart));
+      this.onPerformance?.({ fps: this.measuredFps, droppedFrames: this.droppedFrames });
+      this.frameCount = 0;
+      this.frameWindowStart = now;
+    }
     const canvas = this.canvas;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -253,6 +270,7 @@ export class WmixEngine {
   }
   dispose() {
     cancelAnimationFrame(this.frame); this.canvas = null; this.clearPreview();
+    this.onPerformance = undefined;
     if (this.recorder && this.recorder.state !== "inactive") this.recorder.stop();
     this.recordingStream?.getVideoTracks().forEach(track => track.stop());
     this.recordingStream = null;
