@@ -46,6 +46,17 @@ function harness() {
       },
     },
   };
+  // The production engine imports the DOM-free SceneGraph; resolve it in the VM harness.
+  const sceneSource = readFileSync(new URL("../src/engine/SceneGraph.ts", import.meta.url), "utf8");
+  const sceneCompiled = ts.transpileModule(sceneSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const sceneContext = { exports: {} };
+  vm.runInNewContext(sceneCompiled, sceneContext, { filename: "SceneGraph.js" });
+  context.require = (name) => {
+    if (name === "./SceneGraph") return sceneContext.exports;
+    throw new Error("Unexpected import: " + name);
+  };
   const source = readFileSync(new URL("../src/engine/WmixEngine.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -183,5 +194,32 @@ test("Disconnected overlay remains assigned for automatic recovery", async () =>
   assert.equal(engine.currentProgram(), first);
   assert.equal(engine.list().find(source => source.id === second).offline, true);
   assert.doesNotThrow(() => engine.draw());
+  engine.dispose();
+});
+
+test("SceneGraph returns isolated snapshots and preserves Program on Preview updates", async () => {
+  const { engine, canvas } = harness();
+  engine.attach(canvas());
+  const first = await engine.addCamera();
+  const second = await engine.addCamera();
+  engine.prepareScene(second, first, { x: 0.4, y: 0.4, width: 0.2 });
+  const snapshot = engine.currentPreviewScene();
+  snapshot.layout.x = 0.99;
+  assert.equal(engine.currentPreviewScene().layout.x, 0.4);
+  assert.equal(engine.currentProgram(), first);
+  engine.dispose();
+});
+
+test("SceneGraph clears removed overlay but preserves other scene references", async () => {
+  const { engine, canvas } = harness();
+  engine.attach(canvas());
+  const first = await engine.addCamera();
+  const second = await engine.addCamera();
+  engine.setOverlay(second);
+  engine.prepareScene(first, second, { x: 0.3, y: 0.3, width: 0.2 });
+  engine.remove(second);
+  assert.equal(engine.currentOverlay(), null);
+  assert.equal(engine.currentPreviewScene().base, first);
+  assert.equal(engine.currentPreviewScene().overlay, null);
   engine.dispose();
 });
