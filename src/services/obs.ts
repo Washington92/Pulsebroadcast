@@ -13,7 +13,12 @@ export class ObsClient {
     if(this.socket) this.disconnect();
     this.update("connecting");
     return new Promise((resolve,reject)=>{
-      const ws = new WebSocket(url);this.socket=ws;
+      let settled=false;
+      const fail=(err:Error)=>{if(!settled){settled=true;reject(err);}};
+      const succeed=()=>{if(!settled){settled=true;resolve();}};
+      let ws:WebSocket;
+      try{ws=new WebSocket(url);}catch(e){this.update("error");fail(e instanceof Error?e:new Error(String(e)));return;}
+      this.socket=ws;
       ws.onmessage=async e=>{
         try {
           const msg=JSON.parse(e.data);
@@ -26,17 +31,17 @@ export class ObsClient {
               authentication=await hash((await hash(password+auth.salt))+auth.challenge);
             }
             ws.send(JSON.stringify({op:1,d:{rpcVersion:1,...(authentication?{authentication}:{})}}));
-          } else if(msg.op===2){this.update("connected");resolve();}
+          } else if(msg.op===2){this.update("connected");succeed();}
           else if(msg.op===5){this.onEvent?.(msg.d.eventType,msg.d.eventData);}
           else if(msg.op===7){
             const id=msg.d.requestId;const p=this.pending.get(id);if(!p)return;
             this.pending.delete(id);
             msg.d.requestStatus.result?p.resolve(msg.d.responseData):p.reject(new Error(msg.d.requestStatus.comment||"OBS request failed"));
           }
-        }catch(err){this.update("error");reject(err);}
+        }catch(err){this.update("error");fail(err instanceof Error?err:new Error(String(err)));ws.close();}
       };
-      ws.onerror=()=>{this.update("error");reject(new Error("Não foi possível conectar ao OBS WebSocket"));};
-      ws.onclose=()=>{this.socket=null;this.update("disconnected");for(const p of this.pending.values())p.reject(new Error("Conexão encerrada"));this.pending.clear();};
+      ws.onerror=()=>{this.update("error");fail(new Error("Não foi possível conectar ao OBS WebSocket"));};
+      ws.onclose=e=>{if(!settled)fail(new Error(`Conexão OBS encerrada (${e.code}${e.reason?": "+e.reason:""})`));this.socket=null;this.update("disconnected");for(const p of this.pending.values())p.reject(new Error("Conexão encerrada"));this.pending.clear();};
     });
   }
   request<T=unknown>(requestType:string,requestData:Record<string,unknown>={}):Promise<T>{
@@ -44,7 +49,8 @@ export class ObsClient {
     const requestId=String(++this.requestId);
     return new Promise<T>((resolve,reject)=>{
       this.pending.set(requestId,{resolve:resolve as (v:unknown)=>void,reject});
-      this.socket!.send(JSON.stringify({op:6,d:{requestType,requestId,requestData}}));
+      try{this.socket!.send(JSON.stringify({op:6,d:{requestType,requestId,requestData}}));}
+      catch(e){this.pending.delete(requestId);reject(e instanceof Error?e:new Error(String(e)));}
     });
   }
   async scenes():Promise<ObsScene[]>{const data=await this.request<{scenes:ObsScene[]}>("GetSceneList");return data.scenes;}
