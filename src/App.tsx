@@ -27,12 +27,13 @@ function ScenePreview({ engine, scene, sources, baseId }: { engine: WmixEngine; 
   </div>;
 }
 
-function SourceTransformEditor({ stream, mode, scale, x, y, onMove }: {
+function SourceTransformEditor({ stream, mode, scale, x, y, onMove, onScale }: {
   stream: MediaStream; mode: "contain" | "cover" | "stretch"; scale: number; x: number; y: number;
-  onMove: (x: number, y: number) => void;
+  onMove: (x: number, y: number) => void; onScale: (scale: number) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const dragRef = useRef<{ pointer: number; clientX: number; clientY: number; x: number; y: number } | null>(null);
+  const [videoSize, setVideoSize] = useState({ width: 16, height: 9 });
+  const dragRef = useRef<{ pointer: number; clientX: number; clientY: number; x: number; y: number; scale: number; handle: string } | null>(null);
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -40,14 +41,50 @@ function SourceTransformEditor({ stream, mode, scale, x, y, onMove }: {
     void video.play().catch(() => {});
     return () => { video.srcObject = null; };
   }, [stream]);
-  return <div role="group" aria-label="Arraste a imagem para reposicionar" className="relative aspect-video w-full touch-none select-none overflow-hidden rounded-md border border-border bg-black cursor-grab active:cursor-grabbing"
-    onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); dragRef.current = { pointer: e.pointerId, clientX: e.clientX, clientY: e.clientY, x, y }; }}
-    onPointerMove={e => { const drag = dragRef.current; if (!drag || drag.pointer !== e.pointerId) return; const rect = e.currentTarget.getBoundingClientRect(); onMove(Math.max(-1, Math.min(1, drag.x + (e.clientX - drag.clientX) / rect.width)), Math.max(-1, Math.min(1, drag.y + (e.clientY - drag.clientY) / rect.height))); }}
-    onPointerUp={e => { if (dragRef.current?.pointer === e.pointerId) dragRef.current = null; }}
-    onPointerCancel={() => { dragRef.current = null; }}>
-    <video ref={videoRef} autoPlay muted playsInline draggable={false} className="pointer-events-none absolute inset-0 h-full w-full" style={{ objectFit: mode === "stretch" ? "fill" : mode, transform: `translate(${x * 100}%, ${y * 100}%) scale(${scale})` }} />
-    <div className="pointer-events-none absolute inset-[8%] border border-dashed border-white/25" />
-    <span className="pointer-events-none absolute bottom-1 left-2 rounded bg-black/70 px-2 py-0.5 text-[10px] text-white">Arraste para posicionar</span>
+  const ratio = videoSize.width / Math.max(1, videoSize.height);
+  const fitWidth = mode === "stretch" ? 1 : mode === "cover" ? Math.max(1, ratio * 9 / 16) : Math.min(1, ratio * 9 / 16);
+  const fitHeight = mode === "stretch" ? 1 : mode === "cover" ? Math.max(1, 16 / (9 * ratio)) : Math.min(1, 16 / (9 * ratio));
+  const boxWidth = fitWidth * scale * 100;
+  const boxHeight = fitHeight * scale * 100;
+  const handles = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
+  const handlePosition: Record<string, { left: string; top: string; cursor: string }> = {
+    nw: { left: "0%", top: "0%", cursor: "nwse-resize" }, n: { left: "50%", top: "0%", cursor: "ns-resize" },
+    ne: { left: "100%", top: "0%", cursor: "nesw-resize" }, e: { left: "100%", top: "50%", cursor: "ew-resize" },
+    se: { left: "100%", top: "100%", cursor: "nwse-resize" }, s: { left: "50%", top: "100%", cursor: "ns-resize" },
+    sw: { left: "0%", top: "100%", cursor: "nesw-resize" }, w: { left: "0%", top: "50%", cursor: "ew-resize" },
+  };
+  return <div className="space-y-1">
+    <div role="group" aria-label="Editor visual: arraste a fonte ou suas alças vermelhas" className="relative aspect-video w-full touch-none select-none overflow-hidden rounded-md border border-border bg-black"
+      onPointerDown={e => {
+        if (e.button !== 0) return;
+        const handle = (e.target as HTMLElement).dataset.handle || "move";
+        e.currentTarget.setPointerCapture(e.pointerId);
+        dragRef.current = { pointer: e.pointerId, clientX: e.clientX, clientY: e.clientY, x, y, scale, handle };
+      }}
+      onPointerMove={e => {
+        const drag = dragRef.current;
+        if (!drag || drag.pointer !== e.pointerId) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const dx = (e.clientX - drag.clientX) / Math.max(1, rect.width);
+        const dy = (e.clientY - drag.clientY) / Math.max(1, rect.height);
+        if (drag.handle === "move") {
+          onMove(Math.max(-1, Math.min(1, drag.x + dx)), Math.max(-1, Math.min(1, drag.y + dy)));
+        } else {
+          const directionX = drag.handle.includes("w") ? -1 : drag.handle.includes("e") ? 1 : 0;
+          const directionY = drag.handle.includes("n") ? -1 : drag.handle.includes("s") ? 1 : 0;
+          const delta = directionX && directionY ? (dx * directionX + dy * directionY) / 2 : directionX ? dx * directionX : dy * directionY;
+          onScale(Math.max(0.1, Math.min(5, drag.scale + delta * 2)));
+        }
+      }}
+      onPointerUp={e => { if (dragRef.current?.pointer === e.pointerId) dragRef.current = null; }}
+      onPointerCancel={() => { dragRef.current = null; }}>
+      <div className="absolute cursor-move border-2 border-red-500" style={{ width: `${boxWidth}%`, height: `${boxHeight}%`, left: `${50 + x * 100}%`, top: `${50 + y * 100}%`, transform: "translate(-50%, -50%)" }}>
+        <video ref={videoRef} autoPlay muted playsInline draggable={false} onLoadedMetadata={e => setVideoSize({ width: e.currentTarget.videoWidth || 16, height: e.currentTarget.videoHeight || 9 })} className="pointer-events-none h-full w-full" style={{ objectFit: "fill" }} />
+        {handles.map(handle => <div key={handle} data-handle={handle} role="presentation" className="absolute h-2.5 w-2.5 border border-red-600 bg-red-500" style={{ left: handlePosition[handle].left, top: handlePosition[handle].top, cursor: handlePosition[handle].cursor, transform: "translate(-50%, -50%)" }} />)}
+      </div>
+      <span className="pointer-events-none absolute bottom-1 left-2 rounded bg-black/75 px-2 py-0.5 text-[10px] text-white">Arraste a imagem ou as alças vermelhas</span>
+    </div>
+    <div className="flex justify-between font-mono text-[10px] text-muted-foreground"><span>Zoom: {Math.round(scale * 100)}%</span><span>Posição: {Math.round(x * 100)}% / {Math.round(y * 100)}%</span></div>
   </div>;
 }
 
@@ -342,7 +379,7 @@ export default function App() {
           const current = engine.getSourceTransform(transformSourceId);
           const change = (patch: Partial<typeof current>) => { engine.setSourceTransform(transformSourceId, patch); setTransformRevision(n => n + 1); };
           return <div className="space-y-2">
-            <SourceTransformEditor key={transformSourceId} stream={sources.find(source => source.id === transformSourceId)!.stream} mode={current.mode} scale={current.scale} x={current.x} y={current.y} onMove={(x, y) => change({ x, y })} />
+            <SourceTransformEditor key={transformSourceId} stream={sources.find(source => source.id === transformSourceId)!.stream} mode={current.mode} scale={current.scale} x={current.x} y={current.y} onMove={(x, y) => change({ x, y })} onScale={scale => change({ scale })} />
             <label className="block">Modo de imagem<select aria-label="Modo de enquadramento" value={current.mode} onChange={e => change({ mode: e.target.value as typeof current.mode })} className="mt-1 w-full rounded border border-border bg-card p-2"><option value="contain">Ajustar à tela (sem cortar)</option><option value="cover">Preencher tela (com recorte)</option><option value="stretch">Esticar até as bordas</option></select></label>
             {(["scale", "x", "y"] as const).map(key => <label key={key} className="flex items-center gap-2"><span className="w-16">{key === "scale" ? "Zoom" : key === "x" ? "Horizontal" : "Vertical"}</span><input type="range" min={key === "scale" ? 0.1 : -1} max={key === "scale" ? 5 : 1} step="0.01" value={current[key]} onChange={e => change({ [key]: Number(e.target.value) })} className="min-w-0 flex-1 accent-primary" /><span className="w-10 text-right">{current[key].toFixed(2)}</span></label>)}
             <button type="button" onClick={() => change({ mode: "contain", scale: 1, x: 0, y: 0 })} className="rounded border border-border bg-secondary px-3 py-2">Restaurar enquadramento</button>
