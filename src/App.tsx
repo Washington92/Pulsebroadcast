@@ -14,6 +14,7 @@ export default function App() {
   const [sources, setSources] = useState<WmixSource[]>([]);
   const [program, setProgram] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  const [recordBus, setRecordBus] = useState<"master" | "a" | "b">("master");
   const [error, setError] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -47,7 +48,8 @@ export default function App() {
     setError("");
     try {
       if (!recording) {
-        engine.startRecording(audio.output());
+        const selectedAudio = recordBus === "master" ? audio.output() : audio.busOutput(recordBus);
+        engine.startRecording(selectedAudio);
         setRecording(true);
         return;
       }
@@ -67,7 +69,8 @@ export default function App() {
   return <>
     <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRecord={toggleRecording} nativeRecording={recording} />
     <canvas ref={canvas} width={1280} height={720} className="pointer-events-none fixed -left-[9999px] top-0" aria-hidden="true" />
-    <div className="fixed bottom-12 right-3 z-[120] flex gap-2">
+    <div className="fixed bottom-12 right-3 z-[120] flex flex-wrap gap-2">
+      <select aria-label="Áudio da gravação" title="Selecione o barramento usado na gravação" value={recordBus} disabled={recording} onChange={e => setRecordBus(e.target.value as "master" | "a" | "b")} className="rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="master">REC: MASTER</option><option value="a">REC: BUS A</option><option value="b">REC: BUS B</option></select>
       <button onClick={() => void addCamera()} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Câmera real</button>
       <button onClick={() => void addScreen()} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Capturar tela</button>
       <select aria-label="Saída de pré-escuta" defaultValue="" onFocus={() => void refreshMicrophones()} onChange={e => { if (e.target.value) void audio.setCueOutput(e.target.value).catch(err => setError(String(err))); }} className="max-w-40 rounded border border-border bg-card p-2 text-xs text-foreground">
