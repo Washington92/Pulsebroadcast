@@ -1,6 +1,7 @@
 /** wMix Engine 0.1 — browser capture/composition; no OBS dependency. */
 export type WmixSource = { id: string; name: string; stream: MediaStream; kind: "camera" | "screen" | "image" | "video"; offline?: boolean };
-export type PipLayout = { x: number; y: number; width: number };
+import { SceneGraph, type PipLayout } from "./SceneGraph";
+export type { PipLayout } from "./SceneGraph";
 export class WmixEngine {
   private sources = new Map<string, WmixSource>();
   private videos = new Map<string, HTMLVideoElement>();
@@ -10,7 +11,7 @@ export class WmixEngine {
   private mediaPlayers = new Map<string, { player: HTMLVideoElement; url: string; frame: number; canvas: HTMLCanvasElement }>();
   private canvas: HTMLCanvasElement | null = null;
   private previewCanvas: HTMLCanvasElement | null = null;
-  private previewScene: { base: string | null; overlay: string | null; layout: PipLayout } | null = null;
+  private readonly scenes = new SceneGraph();
   private frame = 0;
   private frameWindowStart = 0;
   private frameCount = 0;
@@ -23,9 +24,6 @@ export class WmixEngine {
   setTargetFps(fps: 24 | 25 | 30 | 50 | 60) { this.targetFps = fps; this.lastRenderAt = 0; }
   getTargetFps() { return this.targetFps; }
   onPerformance?: (metrics: { fps: number; droppedFrames: number }) => void;
-  private program: string | null = null;
-  private overlay: string | null = null;
-  private pipLayout: PipLayout = { x: 0.685, y: 0.68, width: 0.29 };
   private fadeFrom: string | null = null;
   private fadeSnapshot: HTMLCanvasElement | null = null;
   private fadeScene: { base: string | null; overlay: string | null; layout: PipLayout } | null = null;
@@ -43,7 +41,7 @@ export class WmixEngine {
   onSourcesChanged?: () => void;
   onProgramChanged?: (id: string | null) => void;
   list() { return [...this.sources.values()]; }
-  currentProgram() { return this.program; }
+  currentProgram() { return this.scenes.currentProgram(); }
   renameSource(id: string, name: string) {
     const source = this.sources.get(id);
     if (!source) throw new Error("Input não encontrado");
@@ -53,21 +51,15 @@ export class WmixEngine {
     this.onSourcesChanged?.();
   }
   isTransitioning() { return this.fadeSnapshot !== null; }
-  currentPreviewScene() { return this.previewScene ? { ...this.previewScene, layout: { ...this.previewScene.layout } } : null; }
-  currentOverlay() { return this.overlay; }
-  currentPipLayout(): PipLayout { return { ...this.pipLayout }; }
+  currentPreviewScene() { return this.scenes.currentPreviewScene(); }
+  currentOverlay() { return this.scenes.currentOverlay(); }
+  currentPipLayout(): PipLayout { return this.scenes.currentPipLayout(); }
   setPipLayout(layout: PipLayout) {
-    const width = Math.max(0.1, Math.min(0.8, Number.isFinite(layout.width) ? layout.width : 0.29));
-    const height = width * 9 / 16 * (this.canvas ? this.canvas.width / this.canvas.height : 16 / 9);
-    this.pipLayout = {
-      width,
-      x: Math.max(0, Math.min(1 - width, Number.isFinite(layout.x) ? layout.x : 0)),
-      y: Math.max(0, Math.min(1 - height, Number.isFinite(layout.y) ? layout.y : 0)),
-    };
+    this.scenes.setPipLayout(layout, this.canvas ? this.canvas.width / this.canvas.height : 16 / 9);
   }
   setOverlay(id: string | null) {
     if (id !== null && !this.sources.has(id)) throw new Error("Fonte de overlay inexistente");
-    this.overlay = id;
+    this.scenes.setOverlay(id);
     this.onSourcesChanged?.();
   }
   attach(canvas: HTMLCanvasElement) {
@@ -82,9 +74,9 @@ export class WmixEngine {
   }
   attachPreview(canvas: HTMLCanvasElement | null) { this.previewCanvas = canvas; }
   prepareScene(base: string | null, overlay: string | null, layout: PipLayout) {
-    this.previewScene = { base, overlay, layout: { ...layout } };
+    this.scenes.prepareScene(base, overlay, layout);
   }
-  clearPreview() { this.previewScene = null; this.previewCanvas = null; }
+  clearPreview() { this.scenes.clearPreview(); this.previewCanvas = null; }
   private paintPip(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, overlay: string | null, layout: PipLayout) {
     const video = overlay ? this.videos.get(overlay) : null;
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth) return;
@@ -121,7 +113,7 @@ export class WmixEngine {
     ctx.restore();
   }
   private drawPreview() {
-    const canvas = this.previewCanvas, scene = this.previewScene;
+    const canvas = this.previewCanvas, scene = this.scenes.currentPreviewScene();
     if (!canvas || !scene) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -264,7 +256,7 @@ export class WmixEngine {
       // Ignore delayed events after a source has already been removed.
       if (this.sources.get(id)?.stream === stream) this.handleTrackEnded(id);
     }, { once: true }));
-    if (!this.program) this.setProgram(id);
+    if (!this.scenes.currentProgram()) this.setProgram(id);
     this.onSourcesChanged?.();
     return id;
   }
@@ -295,13 +287,13 @@ export class WmixEngine {
     this.fadeFrom = null;
     this.fadeSnapshot = null;
     this.fadeScene = null;
-    this.program = id; this.onProgramChanged?.(id);
+    this.scenes.setProgram(id); this.onProgramChanged?.(id);
   }
   transitionTo(id: string, durationMs = 500) {
     if (!this.sources.has(id)) throw new Error("Fonte inexistente");
-    if (id === this.program) return;
-    const previous = this.program;
-    const previousScene = { base: this.program, overlay: this.overlay, layout: { ...this.pipLayout } };
+    if (id === this.scenes.currentProgram()) return;
+    const previous = this.scenes.currentProgram();
+    const previousScene = this.scenes.currentProgramScene();
     const snapshot = document.createElement("canvas");
     if (this.canvas) {
       snapshot.width = this.canvas.width;
@@ -319,14 +311,14 @@ export class WmixEngine {
   setManualTransition(id: string, progress: number) {
     if (!this.sources.has(id)) throw new Error("Fonte inexistente");
     const p = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
-    if (this.manualFadeProgress !== null && this.program !== id) {
+    if (this.manualFadeProgress !== null && this.scenes.currentProgram() !== id) {
       // A different target starts a new manual transition, never reuse the old snapshot.
       this.manualFadeProgress = null;
     }
     if (this.manualFadeProgress === null) {
-      if (id === this.program) return;
-      const previous = this.program;
-      const previousScene = { base: previous, overlay: this.overlay, layout: { ...this.pipLayout } };
+      if (id === this.scenes.currentProgram()) return;
+      const previous = this.scenes.currentProgram();
+      const previousScene = this.scenes.currentProgramScene();
       const snapshot = document.createElement("canvas");
       if (this.canvas) {
         snapshot.width = this.canvas.width;
@@ -364,18 +356,15 @@ export class WmixEngine {
     this.videos.delete(id);
     source.stream.getTracks().forEach(track => track.stop());
     if (this.fadeFrom === id) this.fadeFrom = null;
-    if (this.overlay === id) this.overlay = null;
-    if (this.previewScene?.base === id) this.previewScene.base = null;
-    if (this.previewScene?.overlay === id) this.previewScene.overlay = null;
+    const removedScene = this.scenes.removeSource(id, this.sources.keys().next().value ?? null);
     // Keep the snapshot as a safe fallback when a source disappears mid-transition.
     if (this.fadeScene?.base === id) this.fadeScene.base = null;
     if (this.fadeScene?.overlay === id) this.fadeScene.overlay = null;
-    if (this.program === id) {
+    if (removedScene.programChanged) {
       this.fadeSnapshot = null;
       this.fadeScene = null;
       this.fadeFrom = null;
-      this.program = this.sources.keys().next().value ?? null;
-      this.onProgramChanged?.(this.program);
+      this.onProgramChanged?.(this.scenes.currentProgram());
     }
     this.onSourcesChanged?.();
   }
@@ -406,8 +395,9 @@ export class WmixEngine {
     const ctx = this.renderContext;
     if (ctx) {
       ctx.fillStyle = '#080c13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      this.paintBase(ctx, canvas, this.program);
-      this.paintPip(ctx, canvas, this.overlay, this.pipLayout);
+      const programScene = this.scenes.currentProgramScene();
+      this.paintBase(ctx, canvas, programScene.base);
+      this.paintPip(ctx, canvas, programScene.overlay, programScene.layout);
       if (this.fadeSnapshot) {
         const progress = this.manualFadeProgress ?? Math.min(1, (performance.now() - this.fadeStart) / this.fadeDuration);
         if (progress < 1) {
