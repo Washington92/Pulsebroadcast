@@ -1,14 +1,17 @@
 /** Independent wMix audio bus based on the Web Audio API. No OBS code or process. */
-export type AudioInput = { id: string; name: string; stream: MediaStream; volume: number; muted: boolean; level: number };
+export type AudioInput = { id: string; name: string; stream: MediaStream; volume: number; muted: boolean; cue: boolean; level: number };
 type Channel = { input: AudioInput; source: MediaStreamAudioSourceNode; gain: GainNode; analyser: AnalyserNode; samples: Float32Array<ArrayBuffer> };
 export class WmixAudioEngine {
   private context: AudioContext | null = null;
   private destination: MediaStreamAudioDestinationNode | null = null;
   private channels = new Map<string, Channel>();
+  private cueDestination: MediaStreamAudioDestinationNode | null = null;
+  private cueMonitor: HTMLAudioElement | null = null;
+  private cueGains = new Map<string, GainNode>();
   private raf = 0;
   onChange?: (inputs: AudioInput[]) => void;
   private ensureContext() {
-    if (!this.context) { this.context = new AudioContext(); this.destination = this.context.createMediaStreamDestination(); }
+    if (!this.context) { this.context = new AudioContext(); this.destination = this.context.createMediaStreamDestination(); this.cueDestination = this.context.createMediaStreamDestination(); }
     void this.context.resume();
     return this.context;
   }
@@ -26,7 +29,10 @@ export class WmixAudioEngine {
     const gain = ctx.createGain();
     const analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
     source.connect(analyser); analyser.connect(gain); gain.connect(this.destination!);
-    const input: AudioInput = { id, name: stream.getAudioTracks()[0].label || "Microfone", stream, volume: 1, muted: false, level: 0 };
+    const cueGain = ctx.createGain(); cueGain.gain.value = 0;
+    analyser.connect(cueGain); cueGain.connect(this.cueDestination!);
+    this.cueGains.set(id, cueGain);
+    const input: AudioInput = { id, name: stream.getAudioTracks()[0].label || "Microfone", stream, volume: 1, muted: false, cue: false, level: 0 };
     this.channels.set(id, { input, source, gain, analyser, samples: new Float32Array(new ArrayBuffer(analyser.fftSize * 4)) });
     stream.getAudioTracks().forEach(t => t.addEventListener("ended", () => this.remove(id), { once: true }));
     if (!this.raf) this.measure();
@@ -43,10 +49,36 @@ export class WmixAudioEngine {
     ch.input.muted = muted; ch.gain.gain.value = muted ? 0 : ch.input.volume;
     this.emit();
   }
+  async enableCueMonitor() {
+    this.ensureContext();
+    if (!this.cueMonitor) {
+      const monitor = document.createElement("audio");
+      monitor.autoplay = true;
+      monitor.srcObject = this.cueDestination!.stream;
+      this.cueMonitor = monitor;
+    }
+    await this.context!.resume();
+    await this.cueMonitor.play();
+  }
+  async setCue(id: string, enabled: boolean) {
+    const channel = this.channels.get(id);
+    if (!channel) return;
+    if (enabled) await this.enableCueMonitor();
+    channel.input.cue = enabled;
+    this.cueGains.get(id)!.gain.value = enabled ? 1 : 0;
+    this.emit();
+  }
+  async setCueOutput(deviceId: string) {
+    await this.enableCueMonitor();
+    const monitor = this.cueMonitor as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+    if (!monitor.setSinkId) throw new Error("Seleção de saída não suportada neste ambiente");
+    await monitor.setSinkId(deviceId);
+  }
   remove(id: string) {
     const ch = this.channels.get(id); if (!ch) return;
     this.channels.delete(id);
     ch.source.disconnect(); ch.analyser.disconnect(); ch.gain.disconnect();
+    this.cueGains.get(id)?.disconnect(); this.cueGains.delete(id);
     ch.input.stream.getTracks().forEach(t => t.stop()); this.emit();
   }
   private emit() { this.onChange?.(this.list()); }
@@ -62,6 +94,7 @@ export class WmixAudioEngine {
   dispose() {
     cancelAnimationFrame(this.raf); this.raf = 0;
     for (const id of [...this.channels.keys()]) this.remove(id);
-    void this.context?.close(); this.context = null; this.destination = null;
+    if (this.cueMonitor) { this.cueMonitor.pause(); this.cueMonitor.srcObject = null; this.cueMonitor = null; }
+    void this.context?.close(); this.context = null; this.destination = null; this.cueDestination = null;
   }
 }
