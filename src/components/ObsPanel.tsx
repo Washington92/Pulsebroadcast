@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from "react";
 import {ObsClient,type ObsScene,type ObsState} from "../services/obs";
 
 export type ObsMonitorState={connected:boolean;studio:boolean;preview:string;program:string};
-export default function ObsPanel({onMonitorChange}:{onMonitorChange?:(state:ObsMonitorState)=>void}){
+export default function ObsPanel({onMonitorChange,onClientChange}:{onMonitorChange?:(state:ObsMonitorState)=>void;onClientChange?:(client:ObsClient|null)=>void}){
   const client=useRef<ObsClient|null>(null);
   const [status,setStatus]=useState<ObsState>("disconnected");
   const [url,setUrl]=useState("ws://127.0.0.1:4455");
@@ -19,7 +19,7 @@ export default function ObsPanel({onMonitorChange}:{onMonitorChange?:(state:ObsM
   const [transitions,setTransitions]=useState<{transitionName:string;transitionFixed:boolean}[]>([]);
   const [transition,setTransition]=useState("");
   const [transitionMs,setTransitionMs]=useState(300);
-  useEffect(()=>()=>client.current?.disconnect(),[]);
+  useEffect(()=>()=>{client.current?.disconnect();onClientChange?.(null);},[onClientChange]);
   useEffect(()=>{onMonitorChange?.({connected:status==="connected",studio,preview:previewScene,program:programScene});},[status,studio,previewScene,programScene,onMonitorChange]);
   useEffect(()=>{
     if(status!=="connected")return;
@@ -46,13 +46,14 @@ export default function ObsPanel({onMonitorChange}:{onMonitorChange?:(state:ObsM
       setPassword("");
       const list=await obs.scenes();
       setScenes(list);
+      onClientChange?.(obs);
       setSelected(list[0]?.sceneName||"");
       const [mode,stream,record,program]=await Promise.all([obs.getStudioModeEnabled(),obs.getStreamStatus(),obs.getRecordStatus(),obs.getCurrentProgramScene()]);
       const preview=mode.studioModeEnabled?await obs.getCurrentPreviewScene():null;
       const available=await obs.getSceneTransitionList();
       setTransitions(available.transitions);setTransition(available.currentSceneTransitionName);
       setStudio(mode.studioModeEnabled);setStreaming(stream.outputActive);setRecording(record.outputActive);setProgramScene(program.currentProgramSceneName);setPreviewScene(preview?.currentPreviewSceneName||"");
-    }catch(e){setError(e instanceof Error?e.message:String(e));client.current?.disconnect();client.current=null;}
+    }catch(e){setError(e instanceof Error?e.message:String(e));client.current?.disconnect();client.current=null;onClientChange?.(null);}
     finally{setBusy(false);}
   }
   async function preparePreview(){
@@ -70,7 +71,7 @@ export default function ObsPanel({onMonitorChange}:{onMonitorChange?:(state:ObsM
     finally{setBusy(false);}
   }
   async function action(fn:()=>Promise<unknown>){setBusy(true);setError("");try{await fn();const obs=client.current;if(obs){const [stream,record]=await Promise.all([obs.getStreamStatus(),obs.getRecordStatus()]);setStreaming(stream.outputActive);setRecording(record.outputActive);}}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}}
-  function disconnect(){client.current?.disconnect();client.current=null;setScenes([]);setSelected("");setStreaming(false);setRecording(false);setStudio(false);setProgramScene("");setPreviewScene("");setTransitions([]);setTransition("");}
+  function disconnect(){client.current?.disconnect();client.current=null;onClientChange?.(null);setScenes([]);setSelected("");setStreaming(false);setRecording(false);setStudio(false);setProgramScene("");setPreviewScene("");setTransitions([]);setTransition("");}
   return <section className="obs-panel" aria-label="Conexão OBS Studio">
     <h3>OBS STUDIO <span className={"obs-status "+status}>{status==="connected"?"Conectado":status==="connecting"?"Conectando...":status==="error"?"Erro":"Desconectado"}</span></h3>
     <p className="obs-note">Controle experimental de cenas via OBS WebSocket v5. O vídeo continua sendo processado pelo OBS.</p>
