@@ -162,7 +162,7 @@ function Fader({ value, onChange, level, label }: { value: number; onChange: (n:
 const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
-export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeProgramStream, nativeCut, nativeFade, nativeManualTransition, nativeRecord, nativeRecording = false, nativePerformance, advancedOpen = false, onToggleAdvanced, nativeAdd, nativeRemove, nativeRename, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeProgramStream?: MediaStream | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeManualTransition?: (id: string, progress: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativePerformance?: { fps: number; droppedFrames: number }; advancedOpen?: boolean; onToggleAdvanced?: () => void; nativeAdd?: () => Promise<void>; nativeRemove?: (id: string) => void; nativeRename?: (id: string, name: string) => void; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
+export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeProgramStream, nativeCut, nativeFade, nativeManualTransition, nativeGetTransform, nativeSetTransform, nativeRecord, nativeRecording = false, nativePerformance, advancedOpen = false, onToggleAdvanced, nativeAdd, nativeRemove, nativeRename, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeProgramStream?: MediaStream | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeManualTransition?: (id: string, progress: number) => void; nativeGetTransform?: (id: string) => { mode: "contain" | "cover" | "stretch"; scale: number; x: number; y: number }; nativeSetTransform?: (id: string, patch: Partial<{ mode: "contain" | "cover" | "stretch"; scale: number; x: number; y: number }>) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativePerformance?: { fps: number; droppedFrames: number }; advancedOpen?: boolean; onToggleAdvanced?: () => void; nativeAdd?: () => Promise<void>; nativeRemove?: (id: string) => void; nativeRename?: (id: string, name: string) => void; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [panelLayout, setPanelLayout] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("wmix-panel-layout-v3") || "{}") as Record<string, number>;
@@ -201,6 +201,9 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
     window.addEventListener("pointercancel", stop, { once: true });
   };
   useEffect(() => { localStorage.setItem("wmix-panel-layout-v3", JSON.stringify(panelLayout)); }, [panelLayout]);
+  const [editPreview, setEditPreview] = useState(false);
+  const [transformTick, setTransformTick] = useState(0);
+  const transformDrag = useRef<{ pointer: number; startX: number; startY: number; x: number; y: number; scale: number; handle: string } | null>(null);
   const [demoSources, setSources] = useState<Source[]>([]);
   const sources: Source[] = nativeAdd ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [lockedInputs, setLockedInputs] = useState<string[]>([]);
@@ -393,10 +396,47 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-7 items-center gap-2 px-2 text-xs">
             <span className="rounded bg-tally-pvw px-2 py-0.5 text-[10px] font-bold text-primary-foreground">PREVIEW</span>
-            <span className="font-mono text-muted-foreground">{previewId}</span><span className="font-medium">{pvw?.name}</span>
+            <span className="font-mono text-muted-foreground">{previewId}</span><span className="min-w-0 flex-1 truncate font-medium">{pvw?.name}</span>
+            {nativeGetTransform && nativeSetTransform && <button type="button" aria-pressed={editPreview} onClick={() => setEditPreview(v => !v)} className={cn(btn, "h-6 shrink-0 px-2 text-[10px]", editPreview && "border-red-500 text-red-400")}><Pencil className="h-3 w-3" />{editPreview ? "Concluir" : "Transformar"}</button>}
           </div>
           <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
             {renderFrame(pvw)}
+            {editPreview && nativeGetTransform && nativeSetTransform && (() => {
+              const selected = nativeSources[currentPreviewId - 1];
+              if (!selected) return null;
+              const t = nativeGetTransform(selected.id);
+              const handles = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+              const start = (e: React.PointerEvent<HTMLDivElement>, handle: string) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                transformDrag.current = { pointer: e.pointerId, startX: e.clientX, startY: e.clientY, x: t.x, y: t.y, scale: t.scale, handle };
+              };
+              const move = (e: React.PointerEvent<HTMLDivElement>) => {
+                const drag = transformDrag.current;
+                if (!drag || drag.pointer !== e.pointerId) return;
+                const rect = e.currentTarget.closest("[data-transform-area]")?.getBoundingClientRect();
+                if (!rect) return;
+                const dx = (e.clientX - drag.startX) / Math.max(1, rect.width);
+                const dy = (e.clientY - drag.startY) / Math.max(1, rect.height);
+                if (drag.handle === "move") nativeSetTransform(selected.id, { x: Math.max(-1, Math.min(1, drag.x + dx)), y: Math.max(-1, Math.min(1, drag.y + dy)) });
+                else {
+                  const sx = drag.handle.includes("w") ? -1 : drag.handle.includes("e") ? 1 : 0;
+                  const sy = drag.handle.includes("n") ? -1 : drag.handle.includes("s") ? 1 : 0;
+                  const delta = sx && sy ? (dx * sx + dy * sy) / 2 : sx ? dx * sx : dy * sy;
+                  nativeSetTransform(selected.id, { scale: Math.max(0.1, Math.min(5, drag.scale + delta * 2)) });
+                }
+                setTransformTick(n => n + 1);
+              };
+              void transformTick;
+              return <div data-transform-area className="absolute inset-0 touch-none overflow-hidden">
+                <div className="absolute border-2 border-red-500" style={{ width: `${t.scale * 100}%`, height: `${t.scale * 100}%`, left: `${50 + t.x * 100}%`, top: `${50 + t.y * 100}%`, transform: "translate(-50%, -50%)" }}>
+                  <div className="absolute inset-0 cursor-move" onPointerDown={e => start(e, "move")} onPointerMove={move} onPointerUp={() => { transformDrag.current = null; }} onPointerCancel={() => { transformDrag.current = null; }} />
+                  {handles.map(h => <div key={h} role="presentation" className="absolute z-10 h-3 w-3 touch-none border border-red-700 bg-red-500" style={{ left: h.includes("w") ? "0%" : h.includes("e") ? "100%" : "50%", top: h.includes("n") ? "0%" : h.includes("s") ? "100%" : "50%", transform: "translate(-50%, -50%)", cursor: h === "n" || h === "s" ? "ns-resize" : h === "e" || h === "w" ? "ew-resize" : "nwse-resize" }} onPointerDown={e => start(e, h)} onPointerMove={move} onPointerUp={() => { transformDrag.current = null; }} onPointerCancel={() => { transformDrag.current = null; }} />)}
+                </div>
+                <span className="pointer-events-none absolute bottom-1 left-2 rounded bg-black/70 px-2 py-0.5 text-[10px] text-white">Transformação · {Math.round(t.scale * 100)}%</span>
+              </div>;
+            })()}
           </div>
           <Transport {...pvwHead} remaining={pvw?.remaining || "--"}
             extra={<>{["IN", "OUT", "CUE"].map((x) => <button key={x} className={cn(btn, "h-6 px-1.5 text-[10px] font-semibold")}>{x}</button>)}</>} />
