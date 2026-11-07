@@ -16,6 +16,7 @@ export class WmixEngine {
   private chunks: Blob[] = [];
   private recordingError: Error | null = null;
   private recordingStream: MediaStream | null = null;
+  onRecordingStopped?: (error: Error | null) => void;
   onSourcesChanged?: () => void;
   onProgramChanged?: (id: string | null) => void;
   list() { return [...this.sources.values()]; }
@@ -172,9 +173,9 @@ export class WmixEngine {
         const blob = new Blob(this.chunks, { type: recorder.mimeType });
         this.chunks = [];
         this.recordingError = null;
-        if (error) reject(error);
-        else if (!blob.size) reject(new Error('Gravação vazia'));
-        else resolve(blob);
+        if (error) { this.onRecordingStopped?.(error); reject(error); }
+        else if (!blob.size) { const empty = new Error("Gravação vazia"); this.onRecordingStopped?.(empty); reject(empty); }
+        else { this.onRecordingStopped?.(null); resolve(blob); }
       };
       if (recorder.state === 'inactive') {
         recorder.onstop?.(new Event('stop'));
