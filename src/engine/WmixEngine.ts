@@ -83,10 +83,11 @@ export class WmixEngine {
     }
     this.frame = requestAnimationFrame(this.draw);
   };
-  startRecording() {
+  startRecording(audioStream?: MediaStream | null) {
     if (!this.canvas) throw new Error('Program indisponível');
     if (this.recorder?.state === 'recording') throw new Error('Gravação já iniciada');
     const stream = this.canvas.captureStream(30);
+    if (audioStream) audioStream.getAudioTracks().forEach(track => stream.addTrack(track));
     const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(type => MediaRecorder.isTypeSupported(type));
     if (!mimeType) { stream.getTracks().forEach(t => t.stop()); throw new Error('Gravação WebM não suportada'); }
     this.chunks = [];
@@ -98,7 +99,7 @@ export class WmixEngine {
     const recorder = this.recorder;
     if (!recorder || recorder.state !== 'recording') return Promise.reject(new Error('Nenhuma gravação ativa'));
     return new Promise((resolve, reject) => {
-      recorder.onstop = () => { recorder.stream.getTracks().forEach(t => t.stop()); this.recorder = null; resolve(new Blob(this.chunks, { type: recorder.mimeType })); this.chunks = []; };
+      recorder.onstop = () => { recorder.stream.getVideoTracks().forEach(t => t.stop()); this.recorder = null; resolve(new Blob(this.chunks, { type: recorder.mimeType })); this.chunks = []; };
       recorder.onerror = () => reject(new Error('Falha na gravação'));
       recorder.stop();
     });
