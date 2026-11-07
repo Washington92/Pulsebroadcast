@@ -12,6 +12,7 @@ export class WmixEngine {
   private overlay: string | null = null;
   private pipLayout: PipLayout = { x: 0.685, y: 0.68, width: 0.29 };
   private fadeFrom: string | null = null;
+  private fadeSnapshot: HTMLCanvasElement | null = null;
   private fadeStart = 0;
   private fadeDuration = 0;
   private recorder: MediaRecorder | null = null;
@@ -103,14 +104,22 @@ export class WmixEngine {
   setProgram(id: string) {
     if (!this.sources.has(id)) throw new Error('Fonte inexistente');
     this.fadeFrom = null;
+    this.fadeSnapshot = null;
     this.program = id; this.onProgramChanged?.(id);
   }
   transitionTo(id: string, durationMs = 500) {
     if (!this.sources.has(id)) throw new Error("Fonte inexistente");
     if (id === this.program) return;
     const previous = this.program;
+    const snapshot = document.createElement("canvas");
+    if (this.canvas) {
+      snapshot.width = this.canvas.width;
+      snapshot.height = this.canvas.height;
+      snapshot.getContext("2d")?.drawImage(this.canvas, 0, 0);
+    }
     this.setProgram(id);
     this.fadeFrom = previous;
+    this.fadeSnapshot = snapshot.width && snapshot.height ? snapshot : null;
     this.fadeStart = performance.now();
     this.fadeDuration = Math.max(1, durationMs);
   }
@@ -136,21 +145,23 @@ export class WmixEngine {
     if (ctx) {
       ctx.fillStyle = '#080c13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
       const video = this.program ? this.videos.get(this.program) : null;
-      const paint = (v: HTMLVideoElement, alpha = 1) => {
-        const scale = Math.min(canvas.width / v.videoWidth, canvas.height / v.videoHeight);
-        const w = v.videoWidth * scale, h = v.videoHeight * scale;
-        ctx.globalAlpha = alpha;
-        ctx.drawImage(v, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-        ctx.globalAlpha = 1;
-      };
-      const fadeProgress = this.fadeFrom ? Math.min(1, (performance.now() - this.fadeStart) / this.fadeDuration) : 1;
-      const previous = this.fadeFrom ? this.videos.get(this.fadeFrom) : null;
-      if (fadeProgress < 1 && previous?.readyState && previous.videoWidth) paint(previous);
       if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth) {
-        paint(video, fadeProgress);
+        const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+        const w = video.videoWidth * scale, h = video.videoHeight * scale;
+        ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
       }
-      if (fadeProgress >= 1) this.fadeFrom = null;
       this.paintPip(ctx, canvas, this.overlay, this.pipLayout);
+      if (this.fadeSnapshot) {
+        const progress = Math.min(1, (performance.now() - this.fadeStart) / this.fadeDuration);
+        if (progress < 1) {
+          ctx.globalAlpha = 1 - progress;
+          ctx.drawImage(this.fadeSnapshot, 0, 0, canvas.width, canvas.height);
+          ctx.globalAlpha = 1;
+        } else {
+          this.fadeSnapshot = null;
+          this.fadeFrom = null;
+        }
+      }
     }
     this.drawPreview();
     this.frame = requestAnimationFrame(this.draw);
