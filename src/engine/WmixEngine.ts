@@ -5,6 +5,8 @@ export class WmixEngine {
   private sources = new Map<string, WmixSource>();
   private videos = new Map<string, HTMLVideoElement>();
   private canvas: HTMLCanvasElement | null = null;
+  private previewCanvas: HTMLCanvasElement | null = null;
+  private previewScene: { overlay: string | null; layout: PipLayout } | null = null;
   private frame = 0;
   private program: string | null = null;
   private overlay: string | null = null;
@@ -42,6 +44,40 @@ export class WmixEngine {
     cancelAnimationFrame(this.frame);
     this.canvas = canvas;
     this.draw();
+  }
+  attachPreview(canvas: HTMLCanvasElement | null) { this.previewCanvas = canvas; }
+  prepareScene(overlay: string | null, layout: PipLayout) {
+    this.previewScene = { overlay, layout: { ...layout } };
+  }
+  clearPreview() { this.previewScene = null; this.previewCanvas = null; }
+  private paintPip(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, overlay: string | null, layout: PipLayout) {
+    const video = overlay ? this.videos.get(overlay) : null;
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth) return;
+    const boxWidth = canvas.width * layout.width;
+    const boxHeight = boxWidth * 9 / 16;
+    const x = canvas.width * layout.x, y = canvas.height * layout.y;
+    ctx.fillStyle = '#05070b';
+    ctx.fillRect(x - 3, y - 3, boxWidth + 6, boxHeight + 6);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, boxWidth, boxHeight); ctx.clip();
+    const scale = Math.max(boxWidth / video.videoWidth, boxHeight / video.videoHeight);
+    const w = video.videoWidth * scale, h = video.videoHeight * scale;
+    ctx.drawImage(video, x + (boxWidth - w) / 2, y + (boxHeight - h) / 2, w, h);
+    ctx.restore();
+  }
+  private drawPreview() {
+    const canvas = this.previewCanvas, scene = this.previewScene;
+    if (!canvas || !scene) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#080c13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const video = this.program ? this.videos.get(this.program) : null;
+    if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth) {
+      const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+      const w = video.videoWidth * scale, h = video.videoHeight * scale;
+      ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    }
+    this.paintPip(ctx, canvas, scene.overlay, scene.layout);
   }
   async addCamera(deviceId?: string) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
@@ -114,23 +150,9 @@ export class WmixEngine {
         paint(video, fadeProgress);
       }
       if (fadeProgress >= 1) this.fadeFrom = null;
-      // Independent picture-in-picture layer composited into the Program recording.
-      const overlayVideo = this.overlay ? this.videos.get(this.overlay) : null;
-      if (overlayVideo && overlayVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && overlayVideo.videoWidth) {
-        const boxWidth = canvas.width * this.pipLayout.width;
-        const boxHeight = boxWidth * 9 / 16;
-        const x = canvas.width * this.pipLayout.x;
-        const y = canvas.height * this.pipLayout.y;
-        ctx.fillStyle = '#05070b';
-        ctx.fillRect(x - 3, y - 3, boxWidth + 6, boxHeight + 6);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(x, y, boxWidth, boxHeight); ctx.clip();
-        const scale = Math.max(boxWidth / overlayVideo.videoWidth, boxHeight / overlayVideo.videoHeight);
-        const w = overlayVideo.videoWidth * scale, h = overlayVideo.videoHeight * scale;
-        ctx.drawImage(overlayVideo, x + (boxWidth - w) / 2, y + (boxHeight - h) / 2, w, h);
-        ctx.restore();
-      }
+      this.paintPip(ctx, canvas, this.overlay, this.pipLayout);
     }
+    this.drawPreview();
     this.frame = requestAnimationFrame(this.draw);
   };
   startRecording(audioStream?: MediaStream | null) {
@@ -197,7 +219,7 @@ export class WmixEngine {
     });
   }
   dispose() {
-    cancelAnimationFrame(this.frame); this.canvas = null;
+    cancelAnimationFrame(this.frame); this.canvas = null; this.clearPreview();
     if (this.recorder && this.recorder.state !== "inactive") this.recorder.stop();
     this.recordingStream?.getVideoTracks().forEach(track => track.stop());
     this.recordingStream = null;
