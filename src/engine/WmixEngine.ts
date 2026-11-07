@@ -13,6 +13,7 @@ export class WmixEngine {
   private pipLayout: PipLayout = { x: 0.685, y: 0.68, width: 0.29 };
   private fadeFrom: string | null = null;
   private fadeSnapshot: HTMLCanvasElement | null = null;
+  private fadeScene: { base: string | null; overlay: string | null; layout: PipLayout } | null = null;
   private fadeStart = 0;
   private fadeDuration = 0;
   private recorder: MediaRecorder | null = null;
@@ -66,18 +67,20 @@ export class WmixEngine {
     ctx.drawImage(video, x + (boxWidth - w) / 2, y + (boxHeight - h) / 2, w, h);
     ctx.restore();
   }
+  private paintBase(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, id: string | null) {
+    const video = id ? this.videos.get(id) : null;
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth) return;
+    const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+    const w = video.videoWidth * scale, h = video.videoHeight * scale;
+    ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+  }
   private drawPreview() {
     const canvas = this.previewCanvas, scene = this.previewScene;
     if (!canvas || !scene) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.fillStyle = '#080c13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const video = scene.base ? this.videos.get(scene.base) : null;
-    if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth) {
-      const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
-      const w = video.videoWidth * scale, h = video.videoHeight * scale;
-      ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-    }
+    this.paintBase(ctx, canvas, scene.base);
     this.paintPip(ctx, canvas, scene.overlay, scene.layout);
   }
   async addCamera(deviceId?: string) {
@@ -105,12 +108,14 @@ export class WmixEngine {
     if (!this.sources.has(id)) throw new Error('Fonte inexistente');
     this.fadeFrom = null;
     this.fadeSnapshot = null;
+    this.fadeScene = null;
     this.program = id; this.onProgramChanged?.(id);
   }
   transitionTo(id: string, durationMs = 500) {
     if (!this.sources.has(id)) throw new Error("Fonte inexistente");
     if (id === this.program) return;
     const previous = this.program;
+    const previousScene = { base: this.program, overlay: this.overlay, layout: { ...this.pipLayout } };
     const snapshot = document.createElement("canvas");
     if (this.canvas) {
       snapshot.width = this.canvas.width;
@@ -119,6 +124,7 @@ export class WmixEngine {
     }
     this.setProgram(id);
     this.fadeFrom = previous;
+    this.fadeScene = previousScene;
     this.fadeSnapshot = snapshot.width && snapshot.height ? snapshot : null;
     this.fadeStart = performance.now();
     this.fadeDuration = Math.max(1, durationMs);
@@ -144,21 +150,27 @@ export class WmixEngine {
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.fillStyle = '#080c13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const video = this.program ? this.videos.get(this.program) : null;
-      if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth) {
-        const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
-        const w = video.videoWidth * scale, h = video.videoHeight * scale;
-        ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-      }
+      this.paintBase(ctx, canvas, this.program);
       this.paintPip(ctx, canvas, this.overlay, this.pipLayout);
       if (this.fadeSnapshot) {
         const progress = Math.min(1, (performance.now() - this.fadeStart) / this.fadeDuration);
         if (progress < 1) {
           ctx.globalAlpha = 1 - progress;
-          ctx.drawImage(this.fadeSnapshot, 0, 0, canvas.width, canvas.height);
+          const previous = this.fadeScene;
+          const previousBase = previous?.base ? this.videos.get(previous.base) : null;
+          if (previous && previousBase && previousBase.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && previousBase.videoWidth) {
+            ctx.save();
+            ctx.fillStyle = "#080c13"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            this.paintBase(ctx, canvas, previous.base);
+            this.paintPip(ctx, canvas, previous.overlay, previous.layout);
+            ctx.restore();
+          } else {
+            ctx.drawImage(this.fadeSnapshot, 0, 0, canvas.width, canvas.height);
+          }
           ctx.globalAlpha = 1;
         } else {
           this.fadeSnapshot = null;
+          this.fadeScene = null;
           this.fadeFrom = null;
         }
       }
