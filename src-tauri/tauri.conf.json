@@ -28,6 +28,7 @@
     "active": true,
     "targets": [
       "nsis"
-    ]
+    ],
+    "resources": ["resources/ffmpeg.exe"]
   }
 }
