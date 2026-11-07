@@ -1,0 +1,559 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Activity, ChevronDown, Copy, ExternalLink, FolderOpen, Headphones, Layers, LayoutGrid,
+  Mic, MicOff, MonitorPlay, Pause, Play, Plus, Radio, RotateCcw, Settings, SlidersHorizontal,
+  Sparkles, User, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut, Repeat, Hand, Crosshair, Square, ScanLine,
+} from "lucide-react";
+import { cn } from "../../lib/utils";
+import { initialSources, type Source, type TransitionType } from "./data";
+
+const btn =
+  "inline-flex items-center justify-center gap-1.5 rounded border border-border bg-secondary px-2 text-xs text-secondary-foreground hover:bg-accent transition-colors";
+
+/* ---------- Video surface ---------- */
+function Frame({ s, className }: { s?: Source | undefined; className?: string }) {
+  if (!s) return <div className={cn("bg-background", className)} />;
+  if (!s.img)
+    return (
+      <div className={cn("relative bg-background", className)}>
+        <div className="absolute bottom-[18%] left-[6%] border-l-2 border-primary pl-2">
+          <div className="bg-primary px-1 text-[8px] font-bold text-primary-foreground">AO VIVO</div>
+          <div className="text-[10px] font-semibold text-foreground">Show de lançamento</div>
+        </div>
+      </div>
+    );
+  return (
+    <img
+      src={s.img}
+      alt={s.name}
+      className={cn("h-full w-full object-cover", className)}
+      style={{ filter: s.filter }}
+      draggable={false}
+    />
+  );
+}
+
+function LowerThird({ show }: { show: boolean }) {
+  return (
+    <div
+      className={cn(
+        "absolute bottom-[12%] left-[6%] border-l-4 border-primary bg-background/70 py-1.5 pl-3 pr-6 backdrop-blur transition-all duration-500",
+        show ? "translate-x-0 opacity-100" : "-translate-x-6 opacity-0",
+      )}
+    >
+      <div className="inline-block bg-primary px-1.5 text-[10px] font-bold tracking-wide text-primary-foreground">AO VIVO</div>
+      <div className="text-lg font-semibold text-foreground">Show de lançamento</div>
+    </div>
+  );
+}
+
+function Transport({ pos, setPos, playing, setPlaying, remaining, extra }: {
+  pos: number; setPos: (n: number) => void; playing: boolean; setPlaying: (b: boolean) => void; remaining: string; extra?: React.ReactNode;
+}) {
+  const fmt = (n: number) => `0:${String(Math.floor(n)).padStart(2, "0")}`;
+  return (
+    <div className="flex h-9 items-center gap-1 px-2">
+      <button className={cn(btn, "h-6 w-6 px-0")} onClick={() => setPos(0)} aria-label="Reiniciar"><RotateCcw className="h-3 w-3" /></button>
+      {[-10, -5].map((d) => (
+        <button key={d} className={cn(btn, "h-6 px-1.5 font-mono")} onClick={() => setPos(Math.max(0, pos + d))}>{d}</button>
+      ))}
+      <button className={cn(btn, "h-6 w-6 px-0")} onClick={() => setPlaying(!playing)} aria-label={playing ? "Pausar" : "Tocar"}>
+        {playing ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+      </button>
+      {[5, 10].map((d) => (
+        <button key={d} className={cn(btn, "h-6 px-1.5 font-mono")} onClick={() => setPos(Math.min(60, pos + d))}>+{d}</button>
+      ))}
+      <span className="ml-2 font-mono text-[11px] text-muted-foreground">{fmt(pos)}</span>
+      <input type="range" min={0} max={60} step={0.1} value={pos} onChange={(e) => setPos(+e.target.value)}
+        className="mx-1 h-1 min-w-0 flex-1 accent-primary" aria-label="Posição" />
+      <span className="font-mono text-[11px] font-bold">{remaining}</span>
+      <button className={cn(btn, "ml-1 h-6 w-6 border-primary/60 px-0 text-primary")} aria-label="Loop"><Repeat className="h-3 w-3" /></button>
+      {extra}
+    </div>
+  );
+}
+
+function usePlayhead(start: number) {
+  const [pos, setPos] = useState(start);
+  const [playing, setPlaying] = useState(true);
+  useEffect(() => {
+    if (!playing) return;
+    const t = setInterval(() => setPos((p) => (p >= 60 ? 0 : p + 0.25)), 250);
+    return () => clearInterval(t);
+  }, [playing]);
+  return { pos, setPos, playing, setPlaying };
+}
+
+/* ---------- Audio ---------- */
+function useMeters(sources: Source[]) {
+  const [levels, setLevels] = useState<Record<string, number>>({});
+  const ref = useRef(sources);
+  ref.current = sources;
+  useEffect(() => {
+    const t = setInterval(() => {
+      const next: Record<string, number> = {};
+      let sum = 0;
+      for (const s of ref.current) {
+        const v = s.mute || !s.img ? 0 : Math.min(1, (s.gain / 100) * (0.55 + Math.random() * 0.5));
+        next[s.id] = v;
+        if (s.master) sum = Math.max(sum, v);
+      }
+      next["master"] = sum;
+      next["fone"] = sum * 0.8;
+      next["a"] = sum * 0.6;
+      next["b"] = sum * 0.4;
+      setLevels(next);
+    }, 90);
+    return () => clearInterval(t);
+  }, []);
+  return levels;
+}
+
+function VU({ level, className }: { level: number; className?: string }) {
+  const segs = 24;
+  const lit = Math.round(level * segs);
+  return (
+    <div className={cn("flex w-1.5 flex-col-reverse gap-px", className)}>
+      {Array.from({ length: segs }).map((_, i) => (
+        <div key={i} className={cn("flex-1 rounded-[1px]",
+          i < lit ? (i >= segs - 3 ? "bg-tally-pgm" : i >= segs - 7 ? "bg-warn" : "bg-tally-pvw") : "bg-muted")} />
+      ))}
+    </div>
+  );
+}
+
+const DB_MARKS = ["+6", "0", "-6", "-12", "-24", "-48"];
+
+function Fader({ value, onChange, level, label }: { value: number; onChange: (n: number) => void; level: number; label: string }) {
+  return (
+    <div className="flex h-44 items-stretch gap-1">
+      <div className="flex flex-col justify-between py-1 font-mono text-[8px] text-muted-foreground">
+        {DB_MARKS.map((m) => <span key={m}>{m}</span>)}
+      </div>
+      <div className="relative w-6 rounded bg-background">
+        <div className="absolute inset-y-2 left-1/2 w-0.5 -translate-x-1/2 bg-muted" />
+        <input type="range" min={0} max={100} value={value} aria-label={`Fader ${label}`}
+          onChange={(e) => onChange(+e.target.value)}
+          className="vfader absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+        <div className="pointer-events-none absolute left-0 right-0 h-3 rounded-sm border border-border bg-gradient-to-b from-foreground to-muted-foreground shadow"
+          style={{ bottom: `calc(${value}% * 0.9)` }}>
+          <div className="mx-auto mt-[5px] h-px w-4 bg-background" />
+        </div>
+      </div>
+      <VU level={level} />
+      <VU level={level * 0.94} />
+    </div>
+  );
+}
+
+const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
+
+/* ---------- Main ---------- */
+export function Switcher() {
+  const [sources, setSources] = useState(initialSources);
+  const [programId, setProgramId] = useState(2);
+  const [previewId, setPreviewId] = useState(6);
+  const [transition, setTransition] = useState<TransitionType>("Fade");
+  const [durations, setDurations] = useState<Record<TransitionType, number>>({ Fade: 0.5, Merge: 1, Wipe: 1, Slide: 1 });
+  const [progress, setProgress] = useState(0);
+  const [ftb, setFtb] = useState(false);
+  const [overlays, setOverlays] = useState<(number | null)[]>([11, null, null, null]);
+  const [autoCut, setAutoCut] = useState(false);
+  const [view, setView] = useState<"Inputs" | "Mixer" | "Ambos">("Ambos");
+  const [recording, setRecording] = useState(false);
+  const [streaming, setStreaming] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [clock, setClock] = useState("--:--:--");
+  const [bus, setBus] = useState({ master: 78, fone: 60, a: 70, b: 70, masterMute: false });
+  const [vMode, setVMode] = useState<"safe" | "center" | "track">("center");
+  const [zoom, setZoom] = useState(6);
+  const [tab, setTab] = useState("Preparar");
+  const [manual, setManual] = useState(false);
+  const animRef = useRef<number | null>(null);
+
+  const pgm = sources.find((s) => s.id === programId);
+  const pvw = sources.find((s) => s.id === previewId);
+  const levels = useMeters(sources);
+  const pvwHead = usePlayhead(11);
+  const pgmHead = usePlayhead(24);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setClock(new Date().toLocaleTimeString("pt-BR", { hour12: false }));
+      setElapsed((e) => (recording || streaming ? e + 1 : e));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [recording, streaming]);
+
+  const complete = useCallback(() => {
+    setProgramId(previewId);
+    setPreviewId(programId);
+    setProgress(0);
+  }, [previewId, programId]);
+
+  const cut = useCallback(() => {
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    complete();
+  }, [complete]);
+
+  const auto = useCallback(() => {
+    if (animRef.current) return;
+    const dur = durations[transition] * 1000;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur);
+      setProgress(p);
+      if (p < 1) animRef.current = requestAnimationFrame(step);
+      else {
+        animRef.current = null;
+        complete();
+      }
+    };
+    animRef.current = requestAnimationFrame(step);
+  }, [durations, transition, complete]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "Enter") { e.preventDefault(); auto(); }
+      else if (e.code === "Space") { e.preventDefault(); cut(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [auto, cut]);
+
+  const onTbar = (v: number) => {
+    if (v >= 1) complete();
+    else setProgress(v);
+  };
+
+  const update = (id: number, patch: Partial<Source>) =>
+    setSources((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+
+  const toggleOverlay = (slot: number, id: number) => {
+    setOverlays((o) => o.map((v, i) => (i === slot ? (v === id ? null : id) : v)));
+  };
+
+  const addInput = () => {
+    const id = Math.max(...sources.map((s) => s.id)) + 1;
+    const src = initialSources[(id - 1) % 10]!;
+    setSources((ss) => [...ss, { ...src, id, name: `Input ${id}`, remaining: "-0:00", overlay: null }]);
+  };
+
+  const fmtElapsed = (n: number) =>
+    [Math.floor(n / 3600), Math.floor((n % 3600) / 60), n % 60].map((x) => String(x).padStart(2, "0")).join(":");
+
+  // transition style for incoming layer on program monitor
+  const incoming: React.CSSProperties =
+    transition === "Wipe" ? { clipPath: `inset(0 ${100 - progress * 100}% 0 0)` }
+    : transition === "Slide" ? { transform: `translateX(${(1 - progress) * 100}%)` }
+    : transition === "Merge" ? { opacity: progress, transform: `scale(${1.15 - progress * 0.15})` }
+    : { opacity: progress };
+
+  const titleOnAir = overlays.includes(11);
+  const tabs = ["Preparar", "Editor", "Teleprompter", "Automações", "Ferramentas"];
+
+  return (
+    <div className="flex h-screen min-h-[720px] min-w-[1200px] flex-col gap-2 overflow-hidden bg-background p-2 font-sans text-foreground">
+      {/* ===== Top bar ===== */}
+      <header className="flex h-10 shrink-0 items-center gap-2">
+        <div className="flex items-center gap-2 pr-2">
+          <div className="relative grid h-7 w-7 place-items-center rounded bg-primary">
+            <Play className="h-4 w-4 fill-primary-foreground text-primary-foreground" />
+            {streaming && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-tally-pgm" />}
+          </div>
+          <span className="text-sm font-bold tracking-tight">wMix <span className="font-medium text-muted-foreground">Switcher</span></span>
+          <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-bold",
+            streaming ? "bg-tally-pgm text-destructive-foreground" : "border border-primary text-primary")}>
+            {streaming ? "AO VIVO" : "PRONTO"}
+          </span>
+        </div>
+        <button className={cn(btn, "h-8 w-52 justify-between")}>
+          <span className="flex items-center gap-1.5"><FolderOpen className="h-3.5 w-3.5" />Show de lançamento</span>
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+        <nav className="flex gap-1">
+          {tabs.map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={cn(btn, "h-8 px-4", tab === t && "border-primary/60 bg-accent text-foreground")}>{t}</button>
+          ))}
+        </nav>
+        <button onClick={() => setManual(!manual)}
+          className={cn(btn, "h-8 w-40", manual ? "border-warn text-warn" : "text-muted-foreground")}>
+          <Hand className="h-3.5 w-3.5" />{manual ? "Manual ativo" : "Assumir manual"}
+        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button className={cn(btn, "h-8 border-primary/60 bg-primary/10 px-5 text-primary")}><Sparkles className="h-3.5 w-3.5" />Copilot</button>
+          <button className={cn(btn, "h-8 w-8 px-0")} aria-label="Configurações"><Settings className="h-4 w-4" /></button>
+          <button className={cn(btn, "h-8 w-44 justify-between")}><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Conta</span><ChevronDown className="h-3.5 w-3.5" /></button>
+        </div>
+      </header>
+
+      {/* ===== Upper deck ===== */}
+      <section className="grid shrink-0 grid-cols-[minmax(0,1fr)_200px_minmax(0,1fr)_150px] gap-2">
+        {/* Preview */}
+        <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
+          <div className="flex h-7 items-center gap-2 px-2 text-xs">
+            <span className="rounded bg-tally-pvw px-2 py-0.5 text-[10px] font-bold text-primary-foreground">PREVIEW</span>
+            <span className="font-mono text-muted-foreground">{previewId}</span><span className="font-medium">{pvw?.name}</span>
+          </div>
+          <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
+            <Frame s={pvw} />
+          </div>
+          <Transport {...pvwHead} remaining={pvw?.remaining || "--"}
+            extra={<>{["IN", "OUT", "CUE"].map((x) => <button key={x} className={cn(btn, "h-6 px-1.5 text-[10px] font-semibold")}>{x}</button>)}</>} />
+        </div>
+
+        {/* Center console */}
+        <div className="flex flex-col gap-1.5 rounded-md border border-border bg-card p-2">
+          <div className="text-center font-mono text-2xl font-bold tabular-nums tracking-wider">{clock}</div>
+          <div className="flex justify-between font-mono text-[9px]">
+            <span className="text-muted-foreground">{fmtElapsed(elapsed)}</span>
+            <span className="text-warn">silêncio</span>
+          </div>
+          <div className="flex gap-1.5">
+            <div className="flex flex-1 flex-col gap-1.5">
+              <button onClick={auto} className="rounded bg-primary px-2 py-1 text-left text-primary-foreground hover:brightness-110">
+                <div className="flex justify-between"><span className="text-sm font-bold">AUTO</span><span className="text-[8px]">Enter</span></div>
+                <div className="truncate text-[9px] font-medium">{previewId} {pvw?.name} - {transition} {durations[transition]} s</div>
+              </button>
+              <button onClick={cut} className="rounded border border-border bg-secondary px-2 py-1 text-left hover:bg-accent">
+                <div className="flex justify-between"><span className="text-sm font-bold">CUT</span><span className="text-[8px] text-muted-foreground">Espaço</span></div>
+                <div className="text-[9px] text-muted-foreground">corte seco</div>
+              </button>
+              <div className="grid grid-cols-2 gap-1">
+                {(Object.keys(durations) as TransitionType[]).map((t) => (
+                  <div key={t} onClick={() => setTransition(t)} role="button"
+                    className={cn("flex h-6 cursor-pointer items-center justify-between rounded border px-1.5 text-[10px]",
+                      transition === t ? "border-primary bg-primary/15 text-primary" : "border-border bg-secondary")}>
+                    <span>{t}</span>
+                    <input type="number" step={0.1} min={0.1} max={5} value={durations[t]} aria-label={`Duração ${t}`}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setDurations({ ...durations, [t]: Math.max(0.1, +e.target.value || 0.1) })}
+                      className="w-7 bg-transparent text-right font-mono text-[9px] text-muted-foreground outline-none" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex w-8 flex-col items-center">
+              <span className="text-[8px] font-bold text-muted-foreground">T-BAR</span>
+              <div className="relative mt-1 h-[120px] w-4 rounded-sm bg-background shadow-inner">
+                <div className="absolute inset-x-1/2 inset-y-1 w-px bg-border" />
+                <input type="range" min={0} max={1} step={0.01} value={progress} aria-label="T-Bar"
+                  onChange={(e) => onTbar(+e.target.value)}
+                  className="vfader absolute inset-0 h-full w-full cursor-grab opacity-0" />
+                <div className="pointer-events-none absolute -left-1.5 h-4 w-7 rounded-sm border border-border bg-gradient-to-b from-foreground to-muted-foreground"
+                  style={{ top: `calc(${progress * 100}% * 0.85)` }} />
+              </div>
+            </div>
+          </div>
+          <button onClick={() => setFtb(!ftb)}
+            className={cn(btn, "h-7 font-bold", ftb && "animate-pulse border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
+            <Square className="h-3 w-3" /> FTB
+          </button>
+          <div className="grid grid-cols-2 gap-1">
+            {overlays.map((o, i) => {
+              const s = sources.find((x) => x.id === o);
+              return (
+                <button key={i} onClick={() => setOverlays((ov) => ov.map((v, j) => (j === i ? (v ? null : previewId) : v)))}
+                  className={cn("rounded border px-1.5 py-0.5 text-left text-[9px]",
+                    o ? "border-warn bg-warn text-primary-foreground" : "border-border bg-secondary")}>
+                  <div className="truncate font-semibold">{o ? `${i + 1} ${s?.name}` : `Overlay ${i + 1}`}</div>
+                  <div className={o ? "font-bold" : "text-muted-foreground"}>{o ? "NO AR" : "livre"}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-1">
+            <button onClick={() => setAutoCut(!autoCut)} className={cn(btn, "h-6 flex-1 text-[9px]", autoCut && "border-primary text-primary")}>
+              <Mic className="h-3 w-3" />Auto corte {autoCut ? "ligado" : "desligado"}
+            </button>
+            <button className={cn(btn, "h-6 text-[9px]")}>Mais</button>
+          </div>
+        </div>
+
+        {/* Program */}
+        <div className="glow-pgm flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
+          <div className="flex h-7 items-center gap-2 px-2 text-xs">
+            <span className="rounded bg-tally-pgm px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">PROGRAMA</span>
+            <span className="font-mono text-muted-foreground">{programId}</span><span className="font-medium">{pgm?.name}</span>
+            {streaming && <span className="ml-auto animate-pulse text-[10px] font-bold text-tally-pgm">● NO AR</span>}
+          </div>
+          <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
+            <Frame s={pgm} className="absolute inset-0" />
+            {progress > 0 && <div className="absolute inset-0" style={incoming}><Frame s={pvw} /></div>}
+            <LowerThird show={titleOnAir} />
+            <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
+          </div>
+          <Transport {...pgmHead} remaining={pgm?.remaining || "--"} />
+        </div>
+
+        {/* Vertical */}
+        <div className="flex flex-col rounded-md border border-border bg-card p-2">
+          <div className="text-[10px] font-bold tracking-wider">VERTICAL</div>
+          <div className="relative mx-auto mt-1 aspect-[9/16] w-full overflow-hidden rounded-sm bg-background">
+            {pgm?.img ? (
+              <img src={pgm.img} alt="" className="h-full w-full object-cover" draggable={false}
+                style={{ filter: pgm.filter, objectPosition: vMode === "track" ? `${30 + (pgmHead.pos % 40)}% 50%` : vMode === "safe" ? "20% 50%" : "50% 50%" }} />
+            ) : <Frame s={pgm} className="h-full" />}
+            {vMode === "safe" && <div className="absolute inset-[8%_6%_14%] rounded border border-dashed border-primary/70" />}
+            <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
+          </div>
+          <div className="mt-1.5 text-center text-[9px] leading-tight text-muted-foreground">
+            <div>Tela inteira: {pgm?.name}</div>
+            <div>REC V: <span className={recording ? "text-tally-pgm" : ""}>{recording ? "Gravando" : "Parado"}</span> · LIVE V: <span className={streaming ? "text-tally-pgm" : ""}>{streaming ? "No ar" : "Parado"}</span></div>
+          </div>
+          <div className="mt-1.5 flex justify-center gap-1">
+            {([["safe", ScanLine, "Área segura"], ["center", Crosshair, "Centralizado"], ["track", Activity, "Tracking"]] as const).map(([k, Icon, l]) => (
+              <button key={k} title={l} aria-label={l} onClick={() => setVMode(k)}
+                className={cn(btn, "h-6 w-7 px-0", vMode === k && "border-primary text-primary")}><Icon className="h-3 w-3" /></button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Lower deck ===== */}
+      <div className="flex shrink-0 gap-1 border-b border-border">
+        {([["Inputs", LayoutGrid], ["Mixer", SlidersHorizontal], ["Ambos", Layers]] as const).map(([v, Icon]) => (
+          <button key={v} onClick={() => setView(v)}
+            className={cn("flex items-center gap-1.5 border-b-2 px-4 py-1.5 text-xs",
+              view === v ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+            <Icon className="h-3.5 w-3.5" />{v}
+          </button>
+        ))}
+      </div>
+
+      <section className={cn("grid min-h-0 flex-1 gap-2",
+        view === "Ambos" ? "grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]" : "grid-cols-1")}>
+        {view !== "Mixer" && (
+          <div className="flex min-h-0 flex-col rounded-md border border-border bg-panel">
+            <div className="flex items-center gap-1 p-2">
+              <span className="text-[10px] font-bold tracking-wider text-muted-foreground">INPUTS</span>
+              <span className="ml-auto" />
+              <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Diminuir" onClick={() => setZoom((z) => Math.min(8, z + 1))}><ZoomOut className="h-3 w-3" /></button>
+              <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Aumentar" onClick={() => setZoom((z) => Math.max(3, z - 1))}><ZoomIn className="h-3 w-3" /></button>
+              <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Grade"><LayoutGrid className="h-3 w-3" /></button>
+              <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Destacar"><ExternalLink className="h-3 w-3" /></button>
+            </div>
+            <div className="grid min-h-0 flex-1 auto-rows-min gap-2 overflow-y-auto px-2 pb-2"
+              style={{ gridTemplateColumns: `repeat(${zoom}, minmax(0, 1fr))` }}>
+              {sources.map((s) => {
+                const isPgm = s.id === programId, isPvw = s.id === previewId;
+                return (
+                  <div key={s.id}
+                    className={cn("rounded-md border bg-card p-1 transition-shadow",
+                      isPgm ? "glow-pgm border-transparent" : isPvw ? "glow-pvw border-transparent" : "border-border")}>
+                    <button className="relative block aspect-video w-full overflow-hidden rounded-sm bg-background"
+                      onClick={() => setPreviewId(s.id)} onDoubleClick={() => { setPreviewId(s.id); setTimeout(cut, 0); }}
+                      title="Clique: preview · Duplo clique: corte">
+                      <Frame s={s} />
+                      {s.remaining && <span className="absolute bottom-0.5 right-1 rounded bg-background/80 px-1 font-mono text-[9px] font-bold">{s.remaining}</span>}
+                      <div className="absolute bottom-0 left-0 h-0.5 bg-primary" style={{ width: `${(levels[s.id] ?? 0) * 100}%` }} />
+                    </button>
+                    <div className="mt-1 flex items-center gap-1 text-[10px]">
+                      <span className={cn("grid h-4 min-w-4 place-items-center rounded-sm px-0.5 font-mono font-bold",
+                        isPgm ? "bg-tally-pgm text-destructive-foreground" : isPvw ? "bg-tally-pvw text-primary-foreground" : "text-muted-foreground")}>{s.id}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium" title={`${s.name} · ${s.type}`}>{s.name}</span>
+                      <span className="shrink-0 text-[8px] text-muted-foreground">{s.type}</span>
+                    </div>
+                    <div className="mt-1 flex gap-0.5">
+                      {[0, 1, 2, 3].map((i) => (
+                        <button key={i} onClick={() => toggleOverlay(i, s.id)}
+                          className={cn(btn, "h-5 flex-1 px-0 text-[9px]", overlays[i] === s.id && "border-warn bg-warn text-primary-foreground")}>{i + 1}</button>
+                      ))}
+                      <button onClick={() => update(s.id, { mute: !s.mute })} aria-label="Mudo"
+                        className={cn(btn, "h-5 flex-1 px-0", s.mute && "border-tally-pgm text-tally-pgm")}>
+                        {s.mute ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}</button>
+                      <button onClick={() => update(s.id, { cue: !s.cue })} aria-label="Fone"
+                        className={cn(btn, "h-5 flex-1 px-0", s.cue && "border-warn text-warn")}><Headphones className="h-3 w-3" /></button>
+                    </div>
+                    <input type="range" min={0} max={100} value={s.gain} aria-label={`Ganho ${s.name}`}
+                      onChange={(e) => update(s.id, { gain: +e.target.value })} className="mt-1 h-1 w-full accent-primary" />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {view !== "Inputs" && (
+          <div className="flex min-h-0 flex-col rounded-md border border-border bg-panel">
+            <div className="flex items-center gap-1 p-2">
+              <span className="text-[10px] font-bold tracking-wider text-muted-foreground">MIXER DE ÁUDIO</span>
+              <span className="ml-auto text-[10px] text-muted-foreground">Buses: A–B</span>
+              <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Destacar"><ExternalLink className="h-3 w-3" /></button>
+            </div>
+            <div className="flex min-h-0 flex-1 gap-1.5 overflow-x-auto px-2 pb-2">
+              {/* Bus strips */}
+              {([["MASTER", "master"], ["FONE", "fone"], ["BUS A", "a"], ["BUS B", "b"]] as const).map(([label, k]) => (
+                <div key={k} className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 rounded border border-border bg-card p-1.5">
+                  <span className="text-[10px] font-bold">{label}</span>
+                  {(k === "a" || k === "b") && <div className="flex w-full gap-0.5"><button className={cn(btn, "h-5 flex-1 px-0 text-[9px]")}>M</button><button className={cn(btn, "h-5 flex-1 px-0")}><Volume2 className="h-3 w-3" /></button></div>}
+                  <Fader label={label} value={bus[k]} onChange={(v) => setBus({ ...bus, [k]: v })}
+                    level={k === "master" && bus.masterMute ? 0 : (levels[k] ?? 0) * (bus[k] / 80)} />
+                  <span className="font-mono text-[9px] text-muted-foreground">{toDb(bus[k])} dB</span>
+                  {k === "master" && <button onClick={() => setBus({ ...bus, masterMute: !bus.masterMute })}
+                    className={cn(btn, "h-6 w-full", bus.masterMute && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>Mudo</button>}
+                  {k === "fone" && <button className={cn(btn, "h-6 w-full border-warn text-warn")}><Headphones className="h-3 w-3" /></button>}
+                  {(k === "a" || k === "b") && <button className={cn(btn, "h-6 w-full")}><Copy className="h-3 w-3" /></button>}
+                </div>
+              ))}
+              {/* Channel strips */}
+              {sources.filter((s) => s.img).map((s) => (
+                <div key={s.id} className={cn("flex w-[84px] shrink-0 flex-col items-center gap-1.5 rounded border bg-card p-1.5",
+                  s.id === programId ? "border-tally-pgm" : "border-border")}>
+                  <span className="w-full truncate text-center text-[10px] font-semibold" title={s.name}>{s.name}</span>
+                  <div className="flex w-full gap-0.5">
+                    <button className={cn(btn, "h-5 flex-1 px-0 text-[8px] border-primary/60 text-primary")}>Auto</button>
+                    <button onClick={() => update(s.id, { mute: !s.mute })} aria-label="Mudo"
+                      className={cn(btn, "h-5 flex-1 px-0", s.mute && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
+                      {s.mute ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}</button>
+                    <button onClick={() => update(s.id, { cue: !s.cue })} aria-label="Cue"
+                      className={cn(btn, "h-5 flex-1 px-0", s.cue && "border-warn text-warn")}><Headphones className="h-3 w-3" /></button>
+                  </div>
+                  <Fader label={s.name} value={s.gain} onChange={(v) => update(s.id, { gain: v })} level={levels[s.id] ?? 0} />
+                  <span className="font-mono text-[9px] text-muted-foreground">{toDb(s.gain)} dB</span>
+                  <div className="flex w-full gap-0.5">
+                    {([["M", "master"], ["A", "busA"], ["B", "busB"]] as const).map(([l, key]) => (
+                      <button key={l} onClick={() => update(s.id, { [key]: !s[key] })}
+                        className={cn(btn, "h-6 flex-1 px-0 text-[10px] font-bold", s[key] && "border-primary bg-primary text-primary-foreground")}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ===== Bottom bar ===== */}
+      <footer className="flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-2">
+        <button onClick={addInput} className={cn(btn, "h-7 px-4")}><Plus className="h-3.5 w-3.5" />Adicionar input</button>
+        <div className="flex">
+          <button onClick={() => setRecording(!recording)}
+            className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", recording && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
+            <span className={cn("h-2 w-2 rounded-full bg-tally-pgm", recording && "animate-pulse bg-destructive-foreground")} />
+            {recording ? `Gravando ${fmtElapsed(elapsed)}` : "Gravar"}
+          </button>
+          <button className={cn(btn, "h-7 rounded-l-none border-l-0 px-3")}>H <ChevronDown className="h-3 w-3" /></button>
+        </div>
+        <div className="flex">
+          <button onClick={() => setStreaming(!streaming)}
+            className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", streaming && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
+            <Radio className="h-3.5 w-3.5" />{streaming ? "Encerrar" : "Transmitir"}
+          </button>
+          <button className={cn(btn, "h-7 rounded-l-none border-l-0 px-3")}>H+V <ChevronDown className="h-3 w-3" /></button>
+        </div>
+        <button className={cn(btn, "h-7 px-3")}><ExternalLink className="h-3.5 w-3.5" />Saídas<ChevronDown className="h-3 w-3" /></button>
+        <button className={cn(btn, "h-7 px-3")}><MonitorPlay className="h-3.5 w-3.5" />Monitores<ChevronDown className="h-3 w-3" /></button>
+        <button className={cn(btn, "h-7 px-3")}>Checar saída</button>
+        <div className="ml-auto flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
+          <span className="rounded border border-border px-3 py-1"><Activity className="mr-1 inline h-3 w-3 text-primary" />30 fps · CPU {12 + Math.round((levels["master"] ?? 0) * 8)}%</span>
+          <span className="flex items-center gap-1"><Wifi className={cn("h-3 w-3", streaming ? "text-tally-pvw" : "")} />RTMP {streaming ? "conectado" : "ocioso"}</span>
+          <span>PTZ · inativo</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
