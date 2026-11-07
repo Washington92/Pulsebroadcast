@@ -28,6 +28,8 @@ export class WmixEngine {
   private recordingStream: MediaStream | null = null;
   private recordingWaiters: Array<{ resolve: (blob: Blob) => void; reject: (error: Error) => void }> = [];
   onRecordingStopped?: (error: Error | null) => void;
+  onRecordingRecovered?: (blob: Blob) => void;
+  private recordingStopRequested = false;
   onSourcesChanged?: () => void;
   onProgramChanged?: (id: string | null) => void;
   list() { return [...this.sources.values()]; }
