@@ -65,6 +65,9 @@ export class ObsClient {
   async setStudioModeEnabled(studioModeEnabled:boolean){await this.request("SetStudioModeEnabled",{studioModeEnabled});}
   async getCurrentPreviewScene(){return this.request<{currentPreviewSceneName:string}>("GetCurrentPreviewScene");}
   async setCurrentPreviewScene(sceneName:string){await this.request("SetCurrentPreviewScene",{sceneName});}
+  async getSceneTransitionList(){return this.request<{transitions:{transitionName:string;transitionKind:string;transitionFixed:boolean}[];currentSceneTransitionName:string}>("GetSceneTransitionList");}
+  async setCurrentSceneTransition(transitionName:string){await this.request("SetCurrentSceneTransition",{transitionName});}
+  async setCurrentSceneTransitionDuration(transitionDuration:number){await this.request("SetCurrentSceneTransitionDuration",{transitionDuration});}
   async triggerStudioTransition(){await this.request("TriggerStudioModeTransition");}
   async startStream(){await this.request("StartStream");}
   async stopStream(){await this.request("StopStream");}
