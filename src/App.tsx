@@ -12,28 +12,18 @@ function readPresets(): ScenePreset[] {
     return value.filter((item): item is ScenePreset => !!item && typeof item.name === "string" && typeof item.layout?.x === "number" && typeof item.layout?.y === "number" && typeof item.layout?.width === "number" && (item.overlayName === null || typeof item.overlayName === "string")).slice(0, 20);
   } catch { return []; }
 }
-function SceneVideo({ stream, className }: { stream: MediaStream; className: string }) {
-  const ref = useRef<HTMLVideoElement>(null);
+function ScenePreview({ engine, scene, sources }: { engine: WmixEngine; scene: ScenePreset; sources: WmixSource[] }) {
+  const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    video.srcObject = stream;
-    void video.play().catch(() => {});
-    return () => { video.srcObject = null; };
-  }, [stream]);
-  return <video ref={ref} autoPlay muted playsInline className={className} />;
-}
-
-function ScenePreview({ scene, sources, program }: { scene: ScenePreset; sources: WmixSource[]; program: string | null }) {
-  const base = sources.find(s => s.id === program);
-  const overlay = sources.find(s => s.name === scene.overlayName && s.id !== program);
-  const width = Math.max(0.1, Math.min(0.8, scene.layout.width));
-  const x = Math.max(0, Math.min(1 - width, scene.layout.x));
-  const y = Math.max(0, Math.min(1 - width, scene.layout.y));
+    const overlay = sources.find(s => s.name === scene.overlayName);
+    engine.prepareScene(overlay?.id ?? null, scene.layout);
+    engine.attachPreview(ref.current);
+    return () => engine.clearPreview();
+  }, [engine, scene, sources]);
+  const missing = !!scene.overlayName && !sources.some(s => s.name === scene.overlayName);
   return <div className="relative aspect-video w-full overflow-hidden rounded bg-black">
-    {base ? <SceneVideo stream={base.stream} className="absolute inset-0 h-full w-full object-contain" /> : <span className="absolute inset-0 grid place-items-center text-xs text-muted-foreground">Sem câmera principal</span>}
-    {overlay && <div className="absolute overflow-hidden border-2 border-primary bg-black" style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: `${width * 100}%`, aspectRatio: "16 / 9" }}><SceneVideo stream={overlay.stream} className="h-full w-full object-cover" /></div>}
-    {scene.overlayName && !overlay && <div className="absolute bottom-2 left-2 rounded bg-red-950 px-2 py-1 text-xs text-white">Fonte PiP indisponível: {scene.overlayName}</div>}
+    <canvas ref={ref} width={1280} height={720} className="h-full w-full" aria-label="Composição de Preview do motor wMix" />
+    {missing && <div className="absolute bottom-2 left-2 rounded bg-red-950 px-2 py-1 text-xs text-white">Fonte PiP indisponível: {scene.overlayName}</div>}
   </div>;
 }
 
@@ -155,7 +145,7 @@ export default function App() {
   return <>
     <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRecord={toggleRecording} nativeRecording={recording} />
     <canvas ref={canvas} width={1280} height={720} className="pointer-events-none fixed -left-[9999px] top-0" aria-hidden="true" />
-    {stagedScene && <div className="fixed right-3 top-16 z-[115] w-72 max-w-[90vw] rounded-lg border border-primary bg-card p-2 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground"><span>PREVIEW • {stagedScene.name}</span><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Fechar preview">✕</button></div><ScenePreview scene={stagedScene} sources={sources} program={program} /><p className="mt-1 text-[10px] text-muted-foreground">Prévia visual: câmera atual e PiP preparado. O Program permanece inalterado até TAKE.</p><button type="button" onClick={takeScene} className="mt-2 w-full rounded bg-primary px-2 py-2 text-xs font-bold text-primary-foreground">TAKE • Colocar cena no ar</button></div>}
+    {stagedScene && <div className="fixed right-3 top-16 z-[115] w-72 max-w-[90vw] rounded-lg border border-primary bg-card p-2 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground"><span>PREVIEW • {stagedScene.name}</span><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Fechar preview">✕</button></div><ScenePreview engine={engine} scene={stagedScene} sources={sources} /><p className="mt-1 text-[10px] text-muted-foreground">Prévia visual: câmera atual e PiP preparado. O Program permanece inalterado até TAKE.</p><button type="button" onClick={takeScene} className="mt-2 w-full rounded bg-primary px-2 py-2 text-xs font-bold text-primary-foreground">TAKE • Colocar cena no ar</button></div>}
     <div className="fixed bottom-12 right-3 z-[120] flex flex-wrap gap-2">
       <select aria-label="Fonte de sobreposição PiP" title="Segunda câmera sobre o Program" value={overlay} onChange={e => { engine.setOverlay(e.target.value || null); setOverlay(e.target.value); }} className="max-w-40 rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="">PiP: desligado</option>{sources.filter(source => source.id !== program).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select>
       {overlay && <div className="flex items-center gap-2 rounded border border-border bg-card px-2 text-xs text-foreground">{(["x", "y", "width"] as const).map(key => <label key={key} className="flex items-center gap-1">{key === "width" ? "Tamanho" : key.toUpperCase()}<input type="range" aria-label={`PiP ${key}`} min="0" max={key === "width" ? "80" : "90"} value={Math.round(pipLayout[key] * 100)} onChange={e => updatePipLayout({ ...pipLayout, [key]: Number(e.target.value) / 100 })} className="w-16 accent-primary" /></label>)}</div>}
