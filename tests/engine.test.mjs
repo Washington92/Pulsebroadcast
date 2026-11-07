@@ -271,7 +271,7 @@ test("Program A/V capture clones master audio without owning the mixer track", (
   };
   const canvas = {
     width: 1280, height: 720,
-    getContext: () => ({}),
+    getContext: () => ({ fillRect() {}, drawImage() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, set fillStyle(_) {}, set globalAlpha(_) {} }),
     captureStream: () => ({ getVideoTracks: () => [videoTrack], getTracks: () => [videoTrack] }),
   };
   engine.attach(canvas);
