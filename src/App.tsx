@@ -34,6 +34,7 @@ export default function App() {
   const [recordBus, setRecordBus] = useState<"master" | "a" | "b">("master");
   const [error, setError] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
+  const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
     engine.onSourcesChanged = () => { setSources(engine.list()); setOverlay(engine.currentOverlay() ?? ""); };
     engine.setPipLayout(pipLayout);
@@ -45,7 +46,10 @@ export default function App() {
       if (failure) setError(failure.message);
       else setError(previous => previous === "Gravação interrompida inesperadamente." ? "" : previous);
     };
-    if (canvas.current) engine.attach(canvas.current);
+    if (canvas.current) {
+      engine.attach(canvas.current);
+      if (typeof canvas.current.captureStream === "function") setProgramStream(canvas.current.captureStream(30));
+    }
     return () => { engine.dispose(); audio.dispose(); };
   }, [engine, audio]);
   function updatePipLayout(next: PipLayout) {
@@ -113,7 +117,7 @@ export default function App() {
     }
   }
   return <>
-    <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRecord={toggleRecording} nativeRecording={recording} />
+    <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRecord={toggleRecording} nativeRecording={recording} />
     <canvas ref={canvas} width={1280} height={720} className="pointer-events-none fixed -left-[9999px] top-0" aria-hidden="true" />
     <div className="fixed bottom-12 right-3 z-[120] flex flex-wrap gap-2">
       <select aria-label="Fonte de sobreposição PiP" title="Segunda câmera sobre o Program" value={overlay} onChange={e => { engine.setOverlay(e.target.value || null); setOverlay(e.target.value); }} className="max-w-40 rounded border border-border bg-card px-2 py-2 text-xs text-foreground"><option value="">PiP: desligado</option>{sources.filter(source => source.id !== program).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select>
