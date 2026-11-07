@@ -4,7 +4,7 @@ export type ObsScene = { sceneName: string; sceneIndex: number };
 export class ObsClient {
   private socket: WebSocket | null = null;
   private requestId = 0;
-  private pending = new Map<string,{resolve:(v:unknown)=>void;reject:(e:Error)=>void}>();
+  private pending = new Map<string,{resolve:(v:unknown)=>void;reject:(e:Error)=>void;timer:ReturnType<typeof setTimeout>}>();
   state: ObsState = "disconnected";
   onStateChange?: (state: ObsState) => void;
   onEvent?: (eventType: string, data: unknown) => void;
@@ -35,22 +35,23 @@ export class ObsClient {
           else if(msg.op===5){this.onEvent?.(msg.d.eventType,msg.d.eventData);}
           else if(msg.op===7){
             const id=msg.d.requestId;const p=this.pending.get(id);if(!p)return;
-            this.pending.delete(id);
+            this.pending.delete(id);clearTimeout(p.timer);
             msg.d.requestStatus.result?p.resolve(msg.d.responseData):p.reject(new Error(msg.d.requestStatus.comment||"OBS request failed"));
           }
         }catch(err){this.update("error");fail(err instanceof Error?err:new Error(String(err)));ws.close();}
       };
       ws.onerror=()=>{this.update("error");fail(new Error("Não foi possível conectar ao OBS WebSocket"));};
-      ws.onclose=e=>{if(!settled)fail(new Error(`Conexão OBS encerrada (${e.code}${e.reason?": "+e.reason:""})`));this.socket=null;this.update("disconnected");for(const p of this.pending.values())p.reject(new Error("Conexão encerrada"));this.pending.clear();};
+      ws.onclose=e=>{if(!settled)fail(new Error(`Conexão OBS encerrada (${e.code}${e.reason?": "+e.reason:""})`));this.socket=null;this.update("disconnected");for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(new Error("Conexão encerrada"));}this.pending.clear();};
     });
   }
   request<T=unknown>(requestType:string,requestData:Record<string,unknown>={}):Promise<T>{
     if(this.state!=="connected"||!this.socket) return Promise.reject(new Error("OBS desconectado"));
     const requestId=String(++this.requestId);
     return new Promise<T>((resolve,reject)=>{
-      this.pending.set(requestId,{resolve:resolve as (v:unknown)=>void,reject});
+      const timer=setTimeout(()=>{this.pending.delete(requestId);reject(new Error(`Tempo limite excedido: ${requestType}`));},10000);
+      this.pending.set(requestId,{resolve:resolve as (v:unknown)=>void,reject,timer});
       try{this.socket!.send(JSON.stringify({op:6,d:{requestType,requestId,requestData}}));}
-      catch(e){this.pending.delete(requestId);reject(e instanceof Error?e:new Error(String(e)));}
+      catch(e){clearTimeout(timer);this.pending.delete(requestId);reject(e instanceof Error?e:new Error(String(e)));}
     });
   }
   async getCurrentProgramScene(){return this.request<{currentProgramSceneName:string}>("GetCurrentProgramScene");}
