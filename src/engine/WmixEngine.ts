@@ -442,6 +442,28 @@ export class WmixEngine {
     return stream;
   }
 
+  /**
+   * Creates an independent Program A/V stream for the native encoder bridge.
+   * Video comes from the composited Program Canvas; audio is the mixed master
+   * provided by WmixAudioEngine.output(). The caller must stop only the
+   * returned capture video track; shared master audio tracks are cloned.
+   */
+  captureProgramMedia(masterAudio?: MediaStream | null): MediaStream {
+    const video = this.captureProgramVideo();
+    const result = new MediaStream();
+    try {
+      for (const track of video.getVideoTracks()) result.addTrack(track);
+      for (const track of masterAudio?.getAudioTracks() ?? []) {
+        if (track.readyState === "live") result.addTrack(track.clone());
+      }
+      return result;
+    } catch (error) {
+      result.getTracks().forEach(track => track.stop());
+      video.getTracks().forEach(track => track.stop());
+      throw error;
+    }
+  }
+
   startRecording(audioStream?: MediaStream | null) {
     if (!this.canvas) throw new Error('Program indisponível');
     if (this.recorder) throw new Error('Finalize a gravação anterior antes de iniciar outra');
