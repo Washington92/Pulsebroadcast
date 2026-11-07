@@ -423,6 +423,25 @@ export class WmixEngine {
     }
     this.drawPreview();
   };
+  /**
+   * Step 1 of the native-output bridge: capture the actual composited Program.
+   * This captures the same Canvas used by Preview/Program rendering, including
+   * PiP and transitions, not the selected source's raw camera stream.
+   * The caller owns the returned stream and must stop its tracks on shutdown.
+   * No RTMP connection or audio mixing is implied by this method.
+   */
+  captureProgramVideo(): MediaStream {
+    const canvas = this.canvas;
+    if (!canvas || !this.renderContext) throw new Error("Program indisponível para captura");
+    if (typeof canvas.captureStream !== "function") throw new Error("Captura de Canvas não suportada");
+    const stream = canvas.captureStream(this.targetFps);
+    if (stream.getVideoTracks().length !== 1) {
+      stream.getTracks().forEach(track => track.stop());
+      throw new Error("Falha ao obter faixa de vídeo do Program");
+    }
+    return stream;
+  }
+
   startRecording(audioStream?: MediaStream | null) {
     if (!this.canvas) throw new Error('Program indisponível');
     if (this.recorder) throw new Error('Finalize a gravação anterior antes de iniciar outra');
