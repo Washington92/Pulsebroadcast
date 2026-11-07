@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Switcher } from "./components/pulse/Switcher";
 import { WmixEngine, type PipLayout, type WmixSource } from "./engine/WmixEngine";
 import { WmixAudioEngine, type AudioInput } from "./engine/WmixAudioEngine";
+import { LocalProgramOutput } from "./engine/LocalProgramOutput";
 
 type ScenePreset = { name: string; layout: PipLayout; overlayName: string | null; baseName?: string | null };
 const PRESETS_KEY = "wmix-scene-presets-v1";
@@ -123,6 +124,10 @@ export default function App() {
     try { localStorage.setItem("wmix-output-fps", String(outputFps)); } catch { /* armazenamento indisponível */ }
   }, [engine, outputFps]);
 
+  const [localOutput] = useState(() => new LocalProgramOutput());
+  const [localStreaming, setLocalStreaming] = useState(false);
+  const [localStreamBusy, setLocalStreamBusy] = useState(false);
+  const [localStreamUrl, setLocalStreamUrl] = useState("rtmp://127.0.0.1:1935/live/test");
   const [recordBus, setRecordBus] = useState<"master" | "a" | "b">("master");
   const [error, setError] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -326,6 +331,24 @@ export default function App() {
     setError("");
     try { await audio.addMicrophone(selectedMicrophone || undefined); await refreshMicrophones(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
+  async function toggleLocalStreaming() {
+    setError("");
+    setLocalStreamBusy(true);
+    try {
+      if (localStreaming) {
+        await localOutput.stop();
+        setLocalStreaming(false);
+      } else {
+        await localOutput.start(engine, audio, localStreamUrl, rtmpBitrate);
+        setLocalStreaming(true);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setLocalStreaming(localOutput.active);
+    } finally {
+      setLocalStreamBusy(false);
+    }
+  }
   async function toggleRecording() {
     setError("");
     try {
@@ -410,7 +433,14 @@ export default function App() {
             <label className="space-y-1">Bitrate (kbps)<input type="number" min={500} max={50000} className="w-full rounded border border-border bg-background p-2" value={rtmpBitrate} onChange={e=>setRtmpBitrate(Number(e.target.value))} /></label>
           </div>
           <p className="rounded border border-border bg-background p-3 text-xs text-muted-foreground">FPS do motor: {outputFps}. Codificação planejada: H.264/AAC. Esta tela é uma preparação da interface; a transmissão RTMP nativa ainda não está conectada. A chave permanece somente na memória desta sessão.</p>
-          <button type="button" disabled className="w-full cursor-not-allowed rounded bg-primary/40 px-4 py-3 font-bold text-primary-foreground opacity-70" title="Aguardando integração do transmissor RTMP nativo">Iniciar transmissão · em desenvolvimento</button>
+          <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+            <p className="text-xs font-semibold">Transmissão experimental · RTMP local</p>
+            <p className="text-[11px] text-muted-foreground">Envia o Program real e o áudio Master ao FFmpeg local. Requer FFmpeg no PATH e um receptor RTMP ativo no computador. Ainda não é uma transmissão pública.</p>
+            <input aria-label="Destino RTMP local de teste" value={localStreamUrl} onChange={e => setLocalStreamUrl(e.target.value)} disabled={localStreaming || localStreamBusy} className="w-full rounded border border-border bg-background p-2 font-mono text-xs" />
+            <button type="button" disabled={localStreamBusy} onClick={() => void toggleLocalStreaming()} className="w-full rounded bg-primary px-4 py-3 font-bold text-primary-foreground disabled:opacity-50">{localStreamBusy ? "Aguarde..." : localStreaming ? "Parar teste RTMP local" : "Iniciar teste RTMP local"}</button>
+            {localStreaming && <p role="status" className="text-xs text-amber-500">Captura em execução. Confirme a recepção no servidor RTMP local; isso não comprova ingestão.</p>}
+          </div>
+          <button type="button" disabled className="w-full cursor-not-allowed rounded bg-primary/40 px-4 py-3 font-bold text-primary-foreground opacity-70" title="Saída pública ainda não validada">Transmissão pública · em desenvolvimento</button>
         </div>
       </section>
     </div>}
