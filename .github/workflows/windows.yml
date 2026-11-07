@@ -32,6 +32,25 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path build-metadata | Out-Null
           Set-Content -Path build-metadata/commit.txt -Value "${{ github.sha }}"
+      - name: Install and bundle FFmpeg executable
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          $binary = Get-ChildItem "C:\\ProgramData\\chocolatey\\lib\\ffmpeg" -Filter ffmpeg.exe -Recurse -File | Where-Object { $_.FullName -match '[\\/]bin[\\/]ffmpeg.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wmix-windows-installer
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            build-metadata/commit.txt
+          if-no-files-found: error
+          retention-days: 14
+ } | Select-Object -First 1
+          if (-not $binary) { throw "Real FFmpeg executable not found; refusing to package PATH shim" }
+          New-Item -ItemType Directory -Force -Path src-tauri/resources | Out-Null
+          Copy-Item $binary.FullName src-tauri/resources/ffmpeg.exe
+          & src-tauri/resources/ffmpeg.exe -version
+          if ($LASTEXITCODE -ne 0) { throw "Bundled FFmpeg failed to execute" }
       - run: npm run tauri build
       - uses: actions/upload-artifact@v4
         with:
