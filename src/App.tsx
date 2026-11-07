@@ -9,6 +9,7 @@ export default function App() {
   const [audio] = useState(() => new WmixAudioEngine());
   const [inputs, setInputs] = useState<AudioInput[]>([]);
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
+  const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
   const [selectedMicrophone, setSelectedMicrophone] = useState("");
   const [sources, setSources] = useState<WmixSource[]>([]);
   const [program, setProgram] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export default function App() {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       setMicrophones(devices.filter(device => device.kind === "audioinput"));
+      setOutputs(devices.filter(device => device.kind === "audiooutput"));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
   async function addMicrophone() {
@@ -49,11 +51,15 @@ export default function App() {
     link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
   return <>
-    <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioRemove={id => audio.remove(id)} nativeSources={sources} nativeProgram={program} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRecord={toggleRecording} nativeRecording={recording} />
+    <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeSources={sources} nativeProgram={program} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={addCamera} nativeRecord={toggleRecording} nativeRecording={recording} />
     <canvas ref={canvas} width={1280} height={720} className="pointer-events-none fixed -left-[9999px] top-0" aria-hidden="true" />
     <div className="fixed bottom-12 right-3 z-[120] flex gap-2">
       <button onClick={() => void addCamera()} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Câmera real</button>
       <button onClick={() => void addScreen()} className="rounded border border-primary bg-secondary px-3 py-2 text-xs font-semibold text-foreground">+ Capturar tela</button>
+      <select aria-label="Saída de pré-escuta" defaultValue="" onFocus={() => void refreshMicrophones()} onChange={e => { if (e.target.value) void audio.setCueOutput(e.target.value).catch(err => setError(String(err))); }} className="max-w-40 rounded border border-border bg-card p-2 text-xs text-foreground">
+        <option value="">Fones: saída padrão</option>
+        {outputs.filter(device => device.deviceId).map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Saída ${index + 1}`}</option>)}
+      </select>
       <div className="flex items-center gap-1 rounded border border-border bg-card px-1">
         <select aria-label="Dispositivo de microfone" value={selectedMicrophone} onFocus={() => void refreshMicrophones()} onChange={e => setSelectedMicrophone(e.target.value)} className="max-w-36 bg-card p-1 text-xs text-foreground">
           <option value="">Microfone padrão</option>
