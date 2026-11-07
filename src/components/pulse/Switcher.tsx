@@ -165,7 +165,7 @@ const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeProgramStream, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, nativeRemove, nativeRename, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeProgramStream?: MediaStream | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; nativeRemove?: (id: string) => void; nativeRename?: (id: string, name: string) => void; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [panelLayout, setPanelLayout] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("wmix-panel-layout-v2") || "{}") as Record<string, number>;
+      const saved = JSON.parse(localStorage.getItem("wmix-panel-layout-v3") || "{}") as Record<string, number>;
       return { preview: saved.preview ?? 50, inputs: saved.inputs ?? 62, upper: saved.upper ?? 410 };
     } catch { return { preview: 50, inputs: 62, upper: 410 }; }
   });
@@ -181,9 +181,9 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
     const start = layoutRef.current;
     const area = part === "inputs" ? lowerDeckRef.current : upperDeckRef.current;
     const width = Math.max(1, (area?.clientWidth || 1200) - (part === "preview" ? 300 : 6));
-    const availableHeight = Math.max(250, (upperDeckRef.current?.parentElement?.clientHeight || window.innerHeight) - 210);
+    const availableHeight = Math.max(320, (upperDeckRef.current?.parentElement?.clientHeight || window.innerHeight) - 210);
     const move = (e: PointerEvent) => {
-      const value = part === "upper" ? Math.max(250, Math.min(availableHeight, start.upper + e.clientY - startY))
+      const value = part === "upper" ? Math.max(320, Math.min(availableHeight, start.upper + e.clientY - startY))
         : Math.max(part === "preview" ? 30 : 25, Math.min(part === "preview" ? 70 : 75, (part === "preview" ? start.preview : start.inputs) + (e.clientX - startX) / width * 100));
       setPanelLayout(current => ({ ...current, [part]: value }));
     };
@@ -200,7 +200,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
     window.addEventListener("pointerup", stop, { once: true });
     window.addEventListener("pointercancel", stop, { once: true });
   };
-  useEffect(() => { localStorage.setItem("wmix-panel-layout-v2", JSON.stringify(panelLayout)); }, [panelLayout]);
+  useEffect(() => { localStorage.setItem("wmix-panel-layout-v3", JSON.stringify(panelLayout)); }, [panelLayout]);
   const [demoSources, setSources] = useState<Source[]>([]);
   const sources: Source[] = nativeAdd ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [lockedInputs, setLockedInputs] = useState<string[]>([]);
@@ -338,7 +338,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const tabs = ["Preparar", "Editor", "Teleprompter", "Automações", "Ferramentas"];
 
   return (
-    <div className="flex h-screen min-h-[600px] min-w-[900px] flex-col gap-1.5 overflow-hidden bg-background p-2 font-sans text-foreground">
+    <div className="flex h-screen min-h-0 min-w-[900px] flex-col gap-1.5 overflow-hidden bg-background p-2 font-sans text-foreground">
       {obsError && <div role="alert" className="rounded bg-red-900 px-3 py-1 text-xs text-white">Falha no comando OBS: {obsError}</div>}
       {/* ===== Top bar ===== */}
       <header className="flex h-10 shrink-0 items-center gap-1.5 border-b border-border/60 pb-1">
@@ -378,7 +378,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 62, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
       </div>
       {/* ===== Upper deck ===== */}
-      <section ref={upperDeckRef} className="grid min-h-[260px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px 164px minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
+      <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px 164px minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
         {/* Preview */}
         <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-7 items-center gap-2 px-2 text-xs">
@@ -394,7 +394,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
 
         <div role="separator" aria-label="Redimensionar Preview e Program" aria-orientation="vertical" title="Arraste para ajustar Preview e Program" onPointerDown={e => dragLayout(e, "preview")} className="cursor-col-resize rounded bg-border/50 hover:bg-slate-500 active:bg-slate-400" />
         {/* Center console */}
-        <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card p-1.5">
+        <div className="flex min-h-0 min-w-0 flex-col gap-1 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-1.5">
           <div className="text-center font-mono text-lg font-bold tabular-nums tracking-wider">{clock}</div>
           <div className="flex justify-between font-mono text-[9px]">
             <span className="text-muted-foreground">{fmtElapsed(elapsed)}</span>
@@ -478,7 +478,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         </div>
 
         {/* Vertical */}
-        <div className="flex flex-col rounded-md border border-border bg-card p-2">
+        <div className="flex min-h-0 flex-col overflow-y-auto rounded-md border border-border bg-card p-2">
           <div className="text-[10px] font-bold tracking-wider">VERTICAL</div>
           <div className="relative mx-auto mt-1 aspect-[9/16] w-full overflow-hidden rounded-sm bg-background">
             {pgm?.img ? (
