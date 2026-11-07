@@ -31,6 +31,8 @@ function harness() {
     performance: { now: () => clock },
     requestAnimationFrame: () => 1,
     cancelAnimationFrame() {},
+    setTimeout: () => 1,
+    clearTimeout() {},
     crypto: { randomUUID: () => String(++serial) },
     navigator: {
       mediaDevices: {
@@ -157,28 +159,29 @@ test("Preview and Program can render distinct camera feeds simultaneously", asyn
   engine.dispose();
 });
 
-test("Camera disconnect removes its source and safely switches Program", async () => {
+test("Camera disconnect keeps Program and source available for recovery", async () => {
   const { engine, canvas, tracks } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
-  const second = await engine.addCamera();
+  await engine.addCamera();
   tracks[0].onEnded();
-  assert.equal(engine.currentProgram(), second);
-  assert.equal(engine.list().length, 1);
+  assert.equal(engine.currentProgram(), first);
+  assert.equal(engine.list().length, 2);
+  assert.equal(engine.list().find(source => source.id === first).offline, true);
   assert.doesNotThrow(() => tracks[0].onEnded());
-  assert.equal(engine.currentProgram(), second);
   engine.dispose();
 });
 
-test("Disconnecting an overlay clears PiP without removing Program", async () => {
+test("Disconnected overlay remains assigned for automatic recovery", async () => {
   const { engine, canvas, tracks } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
   const second = await engine.addCamera();
   engine.setOverlay(second);
   tracks[1].onEnded();
-  assert.equal(engine.currentOverlay(), null);
+  assert.equal(engine.currentOverlay(), second);
   assert.equal(engine.currentProgram(), first);
+  assert.equal(engine.list().find(source => source.id === second).offline, true);
   assert.doesNotThrow(() => engine.draw());
   engine.dispose();
 });
