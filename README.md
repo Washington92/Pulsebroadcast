@@ -1,4 +1,4 @@
-# PULSE Broadcast
+# WMix
 
 Software gratuito de produção audiovisual para Windows 10/11 x64, inspirado no fluxo de trabalho do vMix.
 
