@@ -1,18 +1,19 @@
-import {useCallback,useState} from "react";
-import ObsPanel,{type ObsMonitorState} from "./components/ObsPanel";
-type Source={id:number;name:string;type:string};
-const initial:Source[]=[{id:1,name:"CAM 01",type:"Câmera"},{id:2,name:"CAM 02",type:"Câmera"},{id:3,name:"VÍDEO 01",type:"Mídia"},{id:4,name:"IMAGEM 01",type:"Imagem"}];
-export default function App(){
-const [sources,setSources]=useState(initial);const [preview,setPreview]=useState(2);const [program,setProgram]=useState(1);const [vertical,setVertical]=useState(2);const [sync,setSync]=useState(false);const [duration,setDuration]=useState(500);const [vol,setVol]=useState(75);
-const [obsMonitor,setObsMonitor]=useState<ObsMonitorState>({connected:false,studio:false,preview:"",program:""});
-const onObsMonitorChange=useCallback((state:ObsMonitorState)=>setObsMonitor(state),[]);
-const name=(id:number)=>sources.find(x=>x.id===id)?.name||"SEM FONTE";
-const select=(id:number)=>{setPreview(id);if(sync)setVertical(id)};
-const cut=()=>{setProgram(preview);if(sync)setVertical(preview)};
-const add=()=>{const id=Math.max(0,...sources.map(x=>x.id))+1;setSources([...sources,{id,name:"INPUT "+String(id).padStart(2,"0"),type:"Fonte"}]);setPreview(id)};
-return <div className="app"><header><strong>◉ wMix</strong><span>PROJETO DEMO • INTERFACE v0.1</span><div><button onClick={()=>alert("Integração de streaming será implementada em etapa futura.")}>STREAM</button><button onClick={()=>alert("Gravação ainda não disponível.")}>REC</button></div></header>
-<nav>Produção　　Inputs　　Áudio　　Dual Canvas　　Configurações <span>1920×1080 • 60 FPS (alvo)</span></nav>
-<main><section className="screens"><article><div className="screenhead green">PREVIEW <span>{obsMonitor.connected?(obsMonitor.studio?obsMonitor.preview||"SEM CENA":"STUDIO DESLIGADO"):name(preview)}</span></div><div className="monitor"><div className="symbol">▶</div><p>{obsMonitor.connected?(obsMonitor.studio?obsMonitor.preview||"SEM CENA":"STUDIO DESLIGADO"):name(preview)}</p><small>{obsMonitor.connected?"Nome da cena consultado no OBS • imagem indisponível":"Pré-visualização simulada"}</small></div></article><article><div className="screenhead red">PROGRAM <span>{obsMonitor.connected?obsMonitor.program||"SEM CENA":name(program)}</span></div><div className="monitor"><div className="symbol">●</div><p>{obsMonitor.connected?obsMonitor.program||"SEM CENA":name(program)}</p><small>{obsMonitor.connected?"Nome da cena consultado no OBS • imagem indisponível":"Saída simulada — NÃO ESTÁ AO VIVO"}</small></div></article></section>
-<section className="transitions"><button onClick={cut}>CUT</button><button onClick={cut}>FADE</button><button onClick={cut}>WIPE</button><button onClick={cut}>ZOOM</button><label>Duração <input type="number" min="0" max="5000" value={duration} onChange={e=>setDuration(Number(e.target.value))}/> ms</label><span>Transições dos botões são demonstrativas; use o painel OBS para comandos reais</span></section>
-<section className="bottom"><div className="inputs"><h3>INPUTS <button onClick={add}>+ Adicionar</button></h3><div className="tiles">{sources.map(s=><button className={"tile "+(preview===s.id?"selected ":"")+(program===s.id?"live":"")} onClick={()=>select(s.id)} key={s.id}><div className="thumb">▣</div><b>{s.name}</b><small>{s.type}</small></button>)}</div></div><aside><h3>DUAL CANVAS</h3><label className="switch"><input type="checkbox" checked={sync} onChange={e=>{setSync(e.target.checked);if(e.target.checked)setVertical(program)}}/> Cortes sincronizados</label><div className="dual"><div><b>16:9</b><p>{name(program)}</p></div><div><b>9:16</b><p>{name(sync?program:vertical)}</p></div></div>{!sync&&<select value={vertical} onChange={e=>setVertical(Number(e.target.value))}>{sources.map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select>}<ObsPanel onMonitorChange={onObsMonitorChange}/><h3>MIXER DE ÁUDIO</h3><label>Master: {vol}%</label><input type="range" value={vol} onChange={e=>setVol(Number(e.target.value))}/><small>Controle demonstrativo, sem áudio real</small></aside></section></main><footer>wMix v0.1 • Protótipo de interface • Motor audiovisual não conectado</footer></div>
+import { useState } from "react";
+import { Switcher } from "./components/pulse/Switcher";
+import ObsPanel from "./components/ObsPanel";
+
+/** Lovable visual switcher is a demo; OBS commands remain in the dedicated real-control panel. */
+export default function App() {
+  const [showObs, setShowObs] = useState(false);
+  return (
+    <>
+      <Switcher />
+      <div className="wmix-demo-note" role="status">Switcher visual em demonstração • Controle real disponível no painel OBS</div>
+      {!showObs && <button className="wmix-obs-toggle" onClick={() => setShowObs(true)} aria-expanded={false}>Conectar / controlar OBS</button>}
+      {showObs && <aside className="wmix-obs-drawer" aria-label="Painel de controle OBS">
+        <button className="wmix-obs-close" onClick={() => setShowObs(false)}>Fechar painel ✕</button>
+        <ObsPanel />
+      </aside>}
+    </>
+  );
 }
