@@ -198,7 +198,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
 
   const cut = useCallback(() => {
     if (obsConnected) {
-      const scene = sources.find(s => s.id === previewId)?.name;
+      const scene = sources.find(s => s.id === (obsPreview ? currentPreviewId : previewId))?.name;
       if (!scene || !obsTake || obsBusy) return;
       setObsBusy(true); setObsError("");
       void obsTake(scene, "cut", 0).catch(e => setObsError(String(e))).finally(() => setObsBusy(false));
@@ -206,7 +206,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
     }
     if (animRef.current) cancelAnimationFrame(animRef.current);
     complete();
-  }, [complete, obsConnected, obsTake, obsBusy, previewId, sources]);
+  }, [complete, obsConnected, obsTake, obsBusy, previewId, currentPreviewId, obsPreview, sources]);
 
   const auto = useCallback(() => {
     if (obsConnected) {
@@ -466,7 +466,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
                     className={cn("rounded-md border bg-card p-1 transition-shadow",
                       isPgm ? "glow-pgm border-transparent" : isPvw ? "glow-pvw border-transparent" : "border-border")}>
                     <button className="relative block aspect-video w-full overflow-hidden rounded-sm bg-background"
-                      onClick={() => { setPreviewId(s.id); if (obsConnected && obsPrepare) void obsPrepare(s.name).catch(e => setObsError(String(e))); }} onDoubleClick={() => { if (!obsConnected) { setPreviewId(s.id); setTimeout(cut, 0); } else if (obsTake) { void obsTake(s.name, "cut", 0).catch(e => setObsError(String(e))); } }}
+                      onClick={() => { setPreviewId(s.id); if (obsConnected && obsPrepare) void obsPrepare(s.name).catch(e => setObsError(String(e))); }} onDoubleClick={() => { if (!obsConnected) { setPreviewId(s.id); setTimeout(cut, 0); } else if (obsTake && !obsBusy) { setObsBusy(true); void obsTake(s.name, "cut", 0).catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } }}
                       title="Clique: preview · Duplo clique: corte">
                       <Frame s={s} />
                       {s.remaining && <span className="absolute bottom-0.5 right-1 rounded bg-background/80 px-1 font-mono text-[9px] font-bold">{s.remaining}</span>}
