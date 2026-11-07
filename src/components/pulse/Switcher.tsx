@@ -163,22 +163,22 @@ const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
 export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeProgramStream, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeProgramStream?: MediaStream | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
-  const [demoSources, setSources] = useState(initialSources);
-  const sources: Source[] = nativeSources.length ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
+  const [demoSources, setSources] = useState<Source[]>([]);
+  const sources: Source[] = nativeAdd ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [obsError, setObsError] = useState("");
   const [obsBusy, setObsBusy] = useState(false);
-  const [programId, setProgramId] = useState(2);
-  const [previewId, setPreviewId] = useState(6);
+  const [programId, setProgramId] = useState(0);
+  const [previewId, setPreviewId] = useState(0);
   const [transition, setTransition] = useState<TransitionType>("Fade");
   const [durations, setDurations] = useState<Record<TransitionType, number>>({ Fade: 0.5, Merge: 1, Wipe: 1, Slide: 1 });
   const [progress, setProgress] = useState(0);
   const [ftb, setFtb] = useState(false);
-  const [overlays, setOverlays] = useState<(number | null)[]>([11, null, null, null]);
+  const [overlays, setOverlays] = useState<(number | null)[]>([null, null, null, null]);
   const [autoCut, setAutoCut] = useState(false);
   const [view, setView] = useState<"Inputs" | "Mixer" | "Ambos">("Ambos");
   const [demoRecording, setDemoRecording] = useState(false);
   const [demoStreaming, setDemoStreaming] = useState(false);
-  const recording = nativeSources.length ? nativeRecording : obsConnected ? obsRecording : demoRecording;
+  const recording = nativeAdd ? nativeRecording : obsConnected ? obsRecording : demoRecording;
   const streaming = obsConnected ? obsStreaming : demoStreaming;
   const [elapsed, setElapsed] = useState(0);
   const [clock, setClock] = useState("--:--:--");
@@ -189,11 +189,11 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const [manual, setManual] = useState(false);
   const animRef = useRef<number | null>(null);
 
-  const currentProgramId = nativeSources.length ? (nativeSources.findIndex(s => s.id === nativeProgram) + 1) : obsConnected ? (sources.find(s => s.name === obsProgram)?.id ?? 0) : programId;
-  const currentPreviewId = obsConnected && obsPreview ? (sources.find(s => s.name === obsPreview)?.id ?? previewId) : previewId;
+  const currentProgramId = nativeAdd ? (nativeSources.findIndex(s => s.id === nativeProgram) + 1) : obsConnected ? (sources.find(s => s.name === obsProgram)?.id ?? 0) : programId;
+  const currentPreviewId = nativeAdd ? (sources.find(s => s.id === previewId)?.id ?? sources.find(s => s.id !== currentProgramId)?.id ?? 0) : obsConnected && obsPreview ? (sources.find(s => s.name === obsPreview)?.id ?? previewId) : previewId;
   const liveStream = (id: number) => nativeSources[id - 1]?.stream;
-  const renderFrame = (source?: Source, className?: string) => source && nativeSources.length && liveStream(source.id) ? <LiveFrame stream={liveStream(source.id)!} className={className} /> : <Frame s={source} className={className} />;
-  const renderProgram = (className?: string) => nativeSources.length && nativeProgramStream ? <LiveFrame stream={nativeProgramStream} className={className} /> : renderFrame(pgm, className);
+  const renderFrame = (source?: Source, className?: string) => source && nativeAdd && liveStream(source.id) ? <LiveFrame stream={liveStream(source.id)!} className={className} /> : <Frame s={source} className={className} />;
+  const renderProgram = (className?: string) => nativeAdd && nativeProgramStream ? <LiveFrame stream={nativeProgramStream} className={className} /> : renderFrame(pgm, className);
   const pgm = sources.find((s) => s.id === currentProgramId);
   const pvw = sources.find((s) => s.id === currentPreviewId);
   const levels = useMeters(sources);
@@ -215,7 +215,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   }, [previewId, programId]);
 
   const cut = useCallback(() => {
-    if (nativeSources.length && nativeCut) {
+    if (nativeAdd && nativeCut) {
       const source = nativeSources[previewId - 1];
       if (source) { nativeCut(source.id); setPreviewId(currentProgramId || previewId); }
       return;
@@ -232,7 +232,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   }, [complete, obsConnected, obsTake, obsBusy, previewId, currentPreviewId, obsPreview, sources, nativeSources, nativeCut, currentProgramId]);
 
   const auto = useCallback(() => {
-    if (nativeSources.length && nativeFade) { const source = nativeSources[previewId - 1]; if (source) { nativeFade(source.id, Math.round(durations[transition] * 1000)); setPreviewId(currentProgramId || previewId); } return; }
+    if (nativeAdd && nativeFade) { const source = nativeSources[previewId - 1]; if (source) { nativeFade(source.id, Math.round(durations[transition] * 1000)); setPreviewId(currentProgramId || previewId); } return; }
     if (obsConnected) {
       const scene = sources.find(s => s.id === previewId)?.name;
       if (!scene || !obsTake || obsBusy) return;
@@ -280,7 +280,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
 
   const addInput = () => {
     if (obsConnected) { setObsError("Crie a cena no OBS Studio e reconecte para atualizar a lista."); return; }
-    const id = Math.max(...sources.map((s) => s.id)) + 1;
+    const id = Math.max(0, ...sources.map((s) => s.id)) + 1;
     const src = initialSources[(id - 1) % 10]!;
     setSources((ss) => [...ss, { ...src, id, name: `Input ${id}`, remaining: "-0:00", overlay: null }]);
   };
@@ -422,7 +422,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         <div className="glow-pgm flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-7 items-center gap-2 px-2 text-xs">
             <span className="rounded bg-tally-pgm px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">PROGRAMA</span>
-            <span className="font-mono text-muted-foreground">{programId}</span><span className="font-medium">{pgm?.name}</span>
+            <span className="font-mono text-muted-foreground">{currentProgramId || "—"}</span><span className="font-medium">{pgm?.name}</span>
             {streaming && <span className="ml-auto animate-pulse text-[10px] font-bold text-tally-pgm">● NO AR</span>}
           </div>
           <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
