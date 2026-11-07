@@ -63,6 +63,19 @@ impl BridgeSession {
         Ok(self.bytes_written)
     }
 
+    fn status(&mut self) -> Result<String, String> {
+        let Some(child) = self.child.as_mut() else { return Ok("idle".into()); };
+        match child.try_wait() {
+            Ok(Some(exit)) => {
+                self.stdin.take();
+                self.child.take();
+                Ok(format!("stopped: {exit}"))
+            }
+            Ok(None) => Ok(format!("running: {} bytes", self.bytes_written)),
+            Err(error) => Err(format!("Falha ao consultar encoder: {error}")),
+        }
+    }
+
     fn stop(&mut self) -> Result<(), String> {
         self.stdin.take();
         if let Some(mut child) = self.child.take() {
@@ -108,6 +121,12 @@ pub fn push_program_fragment(
 pub fn stop_program_bridge(bridge: tauri::State<'_, ProgramBridge>) -> Result<(), String> {
     let mut session = bridge.0.lock().map_err(|_| "Ponte Program indisponível")?;
     session.stop()
+}
+
+#[tauri::command]
+pub fn program_bridge_status(bridge: tauri::State<'_, ProgramBridge>) -> Result<String, String> {
+    let mut session = bridge.0.lock().map_err(|_| "Ponte Program indisponível")?;
+    session.status()
 }
 
 #[cfg(test)]
