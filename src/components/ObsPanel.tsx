@@ -1,7 +1,8 @@
 import {useEffect,useRef,useState} from "react";
 import {ObsClient,type ObsScene,type ObsState} from "../services/obs";
 
-export default function ObsPanel(){
+export type ObsMonitorState={connected:boolean;studio:boolean;preview:string;program:string};
+export default function ObsPanel({onMonitorChange}:{onMonitorChange?:(state:ObsMonitorState)=>void}){
   const client=useRef<ObsClient|null>(null);
   const [status,setStatus]=useState<ObsState>("disconnected");
   const [url,setUrl]=useState("ws://127.0.0.1:4455");
@@ -16,6 +17,7 @@ export default function ObsPanel(){
   const [streaming,setStreaming]=useState(false);
   const [recording,setRecording]=useState(false);
   useEffect(()=>()=>client.current?.disconnect(),[]);
+  useEffect(()=>{onMonitorChange?.({connected:status==="connected",studio,preview:previewScene,program:programScene});},[status,studio,previewScene,programScene,onMonitorChange]);
   useEffect(()=>{
     if(status!=="connected")return;
     let active=true;
