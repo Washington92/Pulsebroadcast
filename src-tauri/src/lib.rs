@@ -1,6 +1,7 @@
 mod streaming;
 mod output_manager;
 mod program_bridge;
+mod encoder_path;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
