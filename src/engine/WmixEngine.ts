@@ -90,12 +90,25 @@ export class WmixEngine {
     ctx.drawImage(video, x + (boxWidth - w) / 2, y + (boxHeight - h) / 2, w, h);
     ctx.restore();
   }
+  private sourceTransforms = new Map<string, { mode: "contain" | "cover" | "stretch"; scale: number; x: number; y: number }>();
+  setSourceTransform(id: string, patch: Partial<{ mode: "contain" | "cover" | "stretch"; scale: number; x: number; y: number }>) {
+    if (!this.sources.has(id)) throw new Error("Fonte inexistente");
+    const old = this.sourceTransforms.get(id) ?? { mode: "contain" as const, scale: 1, x: 0, y: 0 };
+    this.sourceTransforms.set(id, { ...old, ...patch, scale: Math.max(0.1, Math.min(5, patch.scale ?? old.scale)), x: Math.max(-1, Math.min(1, patch.x ?? old.x)), y: Math.max(-1, Math.min(1, patch.y ?? old.y)) });
+    this.onSourcesChanged?.();
+  }
+  getSourceTransform(id: string) { return this.sourceTransforms.get(id) ?? { mode: "contain" as const, scale: 1, x: 0, y: 0 }; }
   private paintBase(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, id: string | null) {
     const video = id ? this.videos.get(id) : null;
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth) return;
-    const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
-    const w = video.videoWidth * scale, h = video.videoHeight * scale;
-    ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    const transform = id ? this.getSourceTransform(id) : { mode: "contain" as const, scale: 1, x: 0, y: 0 };
+    const baseScale = transform.mode === "cover" ? Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight) : Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+    const w = transform.mode === "stretch" ? canvas.width * transform.scale : video.videoWidth * baseScale * transform.scale;
+    const h = transform.mode === "stretch" ? canvas.height * transform.scale : video.videoHeight * baseScale * transform.scale;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, canvas.width, canvas.height); ctx.clip();
+    ctx.drawImage(video, (canvas.width - w) / 2 + transform.x * canvas.width, (canvas.height - h) / 2 + transform.y * canvas.height, w, h);
+    ctx.restore();
   }
   private drawPreview() {
     const canvas = this.previewCanvas, scene = this.previewScene;
@@ -323,6 +336,7 @@ export class WmixEngine {
     const source = this.sources.get(id);
     if (!source) return;
     this.sources.delete(id);
+    this.sourceTransforms.delete(id);
     const pending = this.recoveryTimers.get(id);
     if (pending !== undefined) clearTimeout(pending);
     this.recoveryTimers.delete(id);
