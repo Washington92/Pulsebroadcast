@@ -60,6 +60,14 @@ export default function App() {
     audio.setMaster(0.78, false);
     engine.onProgramChanged = setProgram;
     engine.onPerformance = setPerformanceMetrics;
+    engine.onRecordingRecovered = blob => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `wmix-recuperado-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    };
     engine.onRecordingStopped = failure => {
       setRecording(false);
       if (failure) setError(failure.message);
