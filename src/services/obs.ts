@@ -53,6 +53,7 @@ export class ObsClient {
       catch(e){this.pending.delete(requestId);reject(e instanceof Error?e:new Error(String(e)));}
     });
   }
+  async getCurrentProgramScene(){return this.request<{currentProgramSceneName:string}>("GetCurrentProgramScene");}
   async scenes():Promise<ObsScene[]>{const data=await this.request<{scenes:ObsScene[]}>("GetSceneList");return data.scenes;}
   async setProgram(sceneName:string){await this.request("SetCurrentProgramScene",{sceneName});}
   async getStreamStatus(){return this.request<{outputActive:boolean;outputTimecode:string;outputDuration:number;outputBytes:number;outputSkippedFrames:number;outputTotalFrames:number}>("GetStreamStatus");}
