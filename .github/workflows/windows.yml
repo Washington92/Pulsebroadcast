@@ -1,15 +1,7 @@
 name: Windows desktop build
 on:
+  # Full installer builds are explicit release-candidate checks, not per-commit builds.
   workflow_dispatch:
-  push:
-    branches: [develop]
-    paths:
-      - 'src/**'
-      - 'src-tauri/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vite.config.ts'
-      - '.github/workflows/windows.yml'
 jobs:
   desktop:
     runs-on: windows-latest
