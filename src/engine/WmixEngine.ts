@@ -1,5 +1,5 @@
 /** wMix Engine 0.1 — browser capture/composition; no OBS dependency. */
-export type WmixSource = { id: string; name: string; stream: MediaStream; kind: "camera" | "screen"; offline?: boolean };
+export type WmixSource = { id: string; name: string; stream: MediaStream; kind: "camera" | "screen" | "image"; offline?: boolean };
 export type PipLayout = { x: number; y: number; width: number };
 export class WmixEngine {
   private sources = new Map<string, WmixSource>();
@@ -155,7 +155,27 @@ export class WmixEngine {
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
     return this.addStream(stream, 'Tela', 'screen');
   }
-  private addStream(stream: MediaStream, label: string, kind: 'camera' | 'screen') {
+  /** Import a still image as a native video source for Preview, Program and recording. */
+  async addImage(file: File) {
+    if (!file.type.startsWith("image/")) throw new Error("Selecione um arquivo de imagem válido.");
+    if (file.size > 30 * 1024 * 1024) throw new Error("Imagem muito grande (máximo 30 MB).");
+    const bitmap = await createImageBitmap(file);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, bitmap.width);
+      canvas.height = Math.max(1, bitmap.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Não foi possível preparar a imagem.");
+      ctx.drawImage(bitmap, 0, 0);
+      const stream = canvas.captureStream(1);
+      const id = this.addStream(stream, file.name.replace(/\\.[^.]+$/, ""), "image");
+      // Ensure a frame is available even when the canvas is otherwise static.
+      const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
+      track?.requestFrame?.();
+      return id;
+    } finally { bitmap.close(); }
+  }
+  private addStream(stream: MediaStream, label: string, kind: 'camera' | 'screen' | 'image') {
     const id = crypto.randomUUID();
     const name = stream.getVideoTracks()[0]?.label || label;
     const video = document.createElement('video');
@@ -174,7 +194,7 @@ export class WmixEngine {
   private handleTrackEnded(id: string) {
     const source = this.sources.get(id);
     if (!source) return;
-    if (source.kind === "screen") { this.remove(id); return; }
+    if (source.kind !== "camera") { this.remove(id); return; }
     source.offline = true;
     this.onSourcesChanged?.();
     this.scheduleRecovery(id);
