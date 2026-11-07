@@ -17,6 +17,13 @@ function harness() {
   const canvas = () => ({ width: 1280, height: 720, getContext: () => ctx });
   const context = {
     exports: {},
+    MediaStream: class {
+      constructor() { this.tracks = []; }
+      addTrack(track) { this.tracks.push(track); }
+      getTracks() { return this.tracks; }
+      getVideoTracks() { return this.tracks.filter(track => track.kind === "video"); }
+      getAudioTracks() { return this.tracks.filter(track => track.kind === "audio"); }
+    },
     document: {
       createElement(type) {
         if (type === "canvas") return canvas();
@@ -267,29 +274,14 @@ test("Program A/V capture clones master audio without owning the mixer track", (
     getContext: () => ({}),
     captureStream: () => ({ getVideoTracks: () => [videoTrack], getTracks: () => [videoTrack] }),
   };
-  // The VM has no browser MediaStream constructor, so supply a minimal one.
-  // captureProgramMedia is verified through its compiled method with this global.
-  const NativeStream = class {
-    constructor() { this.tracks = []; }
-    addTrack(track) { this.tracks.push(track); }
-    getTracks() { return this.tracks; }
-    getVideoTracks() { return this.tracks.filter(t => t.kind === "video"); }
-    getAudioTracks() { return this.tracks.filter(t => t.kind === "audio"); }
-  };
-  const original = engine.captureProgramMedia;
-  // Recompile the method in the test VM by temporarily exposing the constructor.
-  const source = readFileSync(new URL("../src/engine/WmixEngine.ts", import.meta.url), "utf8");
-  assert.match(source, /captureProgramMedia\(masterAudio/);
-  assert.match(source, /track\.clone\(\)/);
-  assert.match(source, /this\.captureProgramVideo\(\)/);
-  assert.equal(typeof NativeStream, "function");
-  assert.equal(typeof original, "function");
   engine.attach(canvas);
-  const capture = engine.captureProgramVideo();
-  assert.equal(capture.getVideoTracks()[0], videoTrack);
-  assert.equal(mixerTrack.readyState, "live");
-  assert.equal(videoStopped, 0);
-  assert.equal(mixerStopped, 0);
-  assert.equal(clonedStopped, 0);
+  const media = engine.captureProgramMedia({ getAudioTracks: () => [mixerTrack] });
+  assert.equal(media.getVideoTracks()[0], videoTrack);
+  assert.equal(media.getAudioTracks().length, 1);
+  assert.notEqual(media.getAudioTracks()[0], mixerTrack);
+  media.getTracks().forEach(track => track.stop());
+  assert.equal(videoStopped, 1);
+  assert.equal(clonedStopped, 1);
+  assert.equal(mixerStopped, 0, "Capture cleanup must never stop the mixer's shared master track");
   engine.dispose();
 });
