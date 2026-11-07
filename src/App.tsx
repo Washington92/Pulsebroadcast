@@ -132,6 +132,14 @@ export default function App() {
   const [selectedVideo, setSelectedVideo] = useState("");
   const [showInputPicker, setShowInputPicker] = useState(false);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
+  const [transmissionSettingsOpen, setTransmissionSettingsOpen] = useState(false);
+  const [rtmpPlatform, setRtmpPlatform] = useState("youtube");
+  const [rtmpUrl, setRtmpUrl] = useState("rtmps://a.rtmps.youtube.com/live2");
+  const [rtmpKey, setRtmpKey] = useState("");
+  const [rtmpBitrate, setRtmpBitrate] = useState(6000);
+  const [rtmpResolution, setRtmpResolution] = useState("1920x1080");
+  const [rtmpShowKey, setRtmpShowKey] = useState(false);
+
   const [transformSourceId, setTransformSourceId] = useState("");
   const [transformRevision, setTransformRevision] = useState(0);
   const [splashVisible, setSplashVisible] = useState(true);
@@ -382,7 +390,32 @@ export default function App() {
     </div>}
     <canvas ref={canvas} width={1280} height={720} className="pointer-events-none fixed -left-[9999px] top-0" aria-hidden="true" />
     {stagedScene && <div className="fixed right-3 top-16 z-[115] w-72 max-w-[90vw] rounded-lg border border-primary bg-card p-2 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-bold text-foreground"><span>PREVIEW • {stagedScene.name}</span><button type="button" onClick={() => { setStagedScene(null); setSelectedPreset(""); }} aria-label="Fechar preview">✕</button></div><select aria-label="Câmera principal do Preview" value={stagedBase ?? ""} onChange={e => setStagedBase(e.target.value || null)} className="mb-2 w-full rounded border border-border bg-card p-1 text-xs text-foreground"><option value="">Escolha a câmera principal</option>{sources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select><ScenePreview engine={engine} scene={stagedScene} sources={sources} baseId={stagedBase} /><p className="mt-1 text-[10px] text-muted-foreground">Prévia visual: câmera atual e PiP preparado. O Program permanece inalterado até TAKE.</p><div className="mt-2 flex gap-2"><button type="button" onClick={() => takeScene("cut")} className="flex-1 rounded bg-primary px-2 py-2 text-xs font-bold text-primary-foreground">CUT cena</button><button type="button" onClick={() => takeScene("fade")} className="flex-1 rounded bg-secondary px-2 py-2 text-xs font-bold text-foreground">FADE 500ms</button></div></div>}
+    {transmissionSettingsOpen && <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/75 p-3" onMouseDown={e => { if (e.target === e.currentTarget) setTransmissionSettingsOpen(false); }}>
+      <section role="dialog" aria-modal="true" aria-label="Configurações de transmissão RTMP" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-5 text-foreground shadow-2xl">
+        <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">Configurações · Transmissão</h2><button type="button" onClick={() => setTransmissionSettingsOpen(false)} className="rounded border border-border px-3 py-1 text-sm">Fechar</button></div>
+        <div className="space-y-3 text-sm">
+          <label className="block space-y-1">Plataforma
+            <select className="w-full rounded border border-border bg-background p-2" value={rtmpPlatform} onChange={e => { const p=e.target.value;setRtmpPlatform(p);setRtmpUrl(p==="youtube"?"rtmps://a.rtmps.youtube.com/live2":p==="twitch"?"rtmps://live.twitch.tv/app":""); }}>
+              <option value="youtube">YouTube</option><option value="twitch">Twitch</option><option value="custom">Servidor personalizado</option>
+            </select>
+          </label>
+          <label className="block space-y-1">URL do servidor RTMP/RTMPS
+            <input type="url" autoComplete="off" className="w-full rounded border border-border bg-background p-2" value={rtmpUrl} onChange={e => setRtmpUrl(e.target.value)} placeholder="rtmps://servidor/app" />
+          </label>
+          <label className="block space-y-1">Chave de transmissão (não armazenada)
+            <div className="flex gap-2"><input type={rtmpShowKey?"text":"password"} autoComplete="off" className="min-w-0 flex-1 rounded border border-border bg-background p-2" value={rtmpKey} onChange={e => setRtmpKey(e.target.value)} placeholder="Chave secreta" /><button type="button" className="rounded border border-border px-3" onClick={() => setRtmpShowKey(v=>!v)}>{rtmpShowKey?"Ocultar":"Mostrar"}</button></div>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="space-y-1">Resolução<select className="w-full rounded border border-border bg-background p-2" value={rtmpResolution} onChange={e=>setRtmpResolution(e.target.value)}><option value="1280x720">720p</option><option value="1920x1080">1080p</option><option value="3840x2160">4K</option></select></label>
+            <label className="space-y-1">Bitrate (kbps)<input type="number" min={500} max={50000} className="w-full rounded border border-border bg-background p-2" value={rtmpBitrate} onChange={e=>setRtmpBitrate(Number(e.target.value))} /></label>
+          </div>
+          <p className="rounded border border-border bg-background p-3 text-xs text-muted-foreground">FPS do motor: {outputFps}. Codificação planejada: H.264/AAC. Esta tela é uma preparação da interface; a transmissão RTMP nativa ainda não está conectada. A chave permanece somente na memória desta sessão.</p>
+          <button type="button" disabled className="w-full cursor-not-allowed rounded bg-primary/40 px-4 py-3 font-bold text-primary-foreground opacity-70" title="Aguardando integração do transmissor RTMP nativo">Iniciar transmissão · em desenvolvimento</button>
+        </div>
+      </section>
+    </div>}
     {showAdvancedControls && <aside id="wmix-advanced-controls" aria-label="Controles avançados do motor wMix" className="fixed bottom-14 right-3 top-14 z-[120] w-[min(410px,calc(100vw-24px))] overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-2xl"><h2 className="mb-3 text-sm font-semibold text-foreground">Controles avançados</h2>
+      <button type="button" onClick={() => setTransmissionSettingsOpen(true)} className="mb-3 w-full rounded-lg border border-primary/40 bg-primary/10 px-3 py-3 text-left text-xs font-semibold text-foreground hover:bg-primary/20">Configurações → Transmissão RTMP/RTMPS</button>
       <section aria-label="Configuração do motor de vídeo" className="mb-3 space-y-2 rounded-lg border border-border p-2 text-xs text-foreground">
         <h3 className="font-semibold">Motor de vídeo · Saída</h3>
         <label className="flex items-center justify-between gap-3">Taxa de quadros (FPS)
