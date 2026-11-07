@@ -109,7 +109,10 @@ export class WmixEngine {
     void video.play().catch(() => {});
     this.videos.set(id, video);
     this.sources.set(id, { id, name, stream });
-    stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => this.remove(id), { once: true }));
+    stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
+      // Ignore delayed events after a source has already been removed.
+      if (this.sources.get(id)?.stream === stream) this.remove(id);
+    }, { once: true }));
     if (!this.program) this.setProgram(id);
     this.onSourcesChanged?.();
     return id;
