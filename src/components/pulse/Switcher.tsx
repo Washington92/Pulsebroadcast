@@ -162,7 +162,7 @@ function Fader({ value, onChange, level, label }: { value: number; onChange: (n:
 const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
-export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeProgramStream, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, nativeRemove, nativeRename, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeProgramStream?: MediaStream | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; nativeRemove?: (id: string) => void; nativeRename?: (id: string, name: string) => void; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
+export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeProgramStream, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativePerformance, advancedOpen = false, onToggleAdvanced, nativeAdd, nativeRemove, nativeRename, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeProgramStream?: MediaStream | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativePerformance?: { fps: number; droppedFrames: number }; advancedOpen?: boolean; onToggleAdvanced?: () => void; nativeAdd?: () => Promise<void>; nativeRemove?: (id: string) => void; nativeRename?: (id: string, name: string) => void; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [panelLayout, setPanelLayout] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("wmix-panel-layout-v3") || "{}") as Record<string, number>;
@@ -344,10 +344,10 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
       <header className="flex h-10 shrink-0 items-center gap-1.5 border-b border-border/60 pb-1">
         <div className="flex items-center gap-2 border-r border-border/70 pr-3">
           <div className="relative grid h-7 w-7 place-items-center rounded-md border border-border bg-secondary">
-            <Play className="h-4 w-4 fill-foreground text-foreground" />
+            <span className="text-xs font-black italic text-primary">w</span>
             {streaming && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-tally-pgm" />}
           </div>
-          <span className="text-sm font-bold tracking-tight">wMix</span>
+          <span className="text-sm font-black italic tracking-tight">w<span className="text-primary">M</span>ix</span>
           <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-bold",
             streaming ? "bg-tally-pgm text-destructive-foreground" : "border border-primary text-primary")}>
             {streaming ? "AO VIVO" : "PRONTO"}
@@ -370,6 +370,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         <div className="ml-auto flex items-center gap-2">
           <button className={cn(btn, "h-8 border-border/70 bg-secondary/60 px-3 text-muted-foreground")}><Sparkles className="h-3.5 w-3.5" />Copilot</button>
           <button className={cn(btn, "h-8 w-8 px-0")} aria-label="Configurações"><Settings className="h-4 w-4" /></button>
+          <button type="button" onClick={onToggleAdvanced} aria-expanded={advancedOpen} aria-label="Controles avançados" title="Controles avançados" className={cn(btn, "h-8 gap-1 px-2", advancedOpen && "border-primary text-primary")}><SlidersHorizontal className="h-3.5 w-3.5" /><span className="hidden xl:inline">Avançado</span></button>
           <button className={cn(btn, "h-8 w-44 justify-between")}><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Conta</span><ChevronDown className="h-3.5 w-3.5" /></button>
         </div>
       </header>
@@ -687,7 +688,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         <button className={cn(btn, "h-7 px-3")}><MonitorPlay className="h-3.5 w-3.5" />Monitores<ChevronDown className="h-3 w-3" /></button>
         <button className={cn(btn, "h-7 px-3")}>Checar saída</button>
         <div className="ml-auto flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
-          <span className="rounded border border-border px-3 py-1"><Activity className="mr-1 inline h-3 w-3 text-primary" />30 fps · CPU {12 + Math.round((levels["master"] ?? 0) * 8)}%</span>
+          <span className="rounded border border-border px-3 py-1" role="status" aria-label="Desempenho de renderização"><Activity className="mr-1 inline h-3 w-3 text-primary" />{nativePerformance ? `FPS ${nativePerformance.fps} · Frames perdidos ${nativePerformance.droppedFrames}` : "Desempenho indisponível"}</span>
           <span className="flex items-center gap-1"><Wifi className={cn("h-3 w-3", streaming ? "text-tally-pvw" : "")} />RTMP {streaming ? "transmitindo via OBS" : "ocioso"}</span>
           <span>PTZ · inativo</span>
         </div>
