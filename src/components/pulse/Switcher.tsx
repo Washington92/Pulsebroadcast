@@ -162,7 +162,7 @@ function Fader({ value, onChange, level, label }: { value: number; onChange: (n:
 const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
-export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
+export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute, nativeAudioCue, nativeAudioRemove, nativeMasterChange, nativeBusVolume, nativeBusSend, nativeSources = [], nativeProgram = null, nativeProgramStream, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeAudio?: AudioInput[]; nativeAudioVolume?: (id: string, volume: number) => void; nativeAudioMute?: (id: string, muted: boolean) => void; nativeAudioCue?: (id: string, enabled: boolean) => Promise<void>; nativeAudioRemove?: (id: string) => void; nativeMasterChange?: (volume: number, muted: boolean) => void; nativeBusVolume?: (bus: "a" | "b", volume: number) => void; nativeBusSend?: (id: string, bus: "a" | "b", enabled: boolean) => void; nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeProgramStream?: MediaStream | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [demoSources, setSources] = useState(initialSources);
   const sources: Source[] = nativeSources.length ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [obsError, setObsError] = useState("");
@@ -193,6 +193,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const currentPreviewId = obsConnected && obsPreview ? (sources.find(s => s.name === obsPreview)?.id ?? previewId) : previewId;
   const liveStream = (id: number) => nativeSources[id - 1]?.stream;
   const renderFrame = (source?: Source, className?: string) => source && nativeSources.length && liveStream(source.id) ? <LiveFrame stream={liveStream(source.id)!} className={className} /> : <Frame s={source} className={className} />;
+  const renderProgram = (className?: string) => nativeSources.length && nativeProgramStream ? <LiveFrame stream={nativeProgramStream} className={className} /> : renderFrame(pgm, className);
   const pgm = sources.find((s) => s.id === currentProgramId);
   const pvw = sources.find((s) => s.id === currentPreviewId);
   const levels = useMeters(sources);
@@ -425,7 +426,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
             {streaming && <span className="ml-auto animate-pulse text-[10px] font-bold text-tally-pgm">● NO AR</span>}
           </div>
           <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
-            {renderFrame(pgm, "absolute inset-0")}
+            {renderProgram("absolute inset-0")}
             {progress > 0 && <div className="absolute inset-0" style={incoming}><Frame s={pvw} /></div>}
             <LowerThird show={titleOnAir} />
             <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
@@ -440,7 +441,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
             {pgm?.img ? (
               <img src={pgm.img} alt="" className="h-full w-full object-cover" draggable={false}
                 style={{ filter: pgm.filter, objectPosition: vMode === "track" ? `${30 + (pgmHead.pos % 40)}% 50%` : vMode === "safe" ? "20% 50%" : "50% 50%" }} />
-            ) : renderFrame(pgm, "h-full")}
+            ) : renderProgram("h-full")}
             {vMode === "safe" && <div className="absolute inset-[8%_6%_14%] rounded border border-dashed border-primary/70" />}
             <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
           </div>
