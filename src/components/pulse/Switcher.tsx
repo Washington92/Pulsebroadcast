@@ -149,7 +149,7 @@ function Fader({ value, onChange, level, label }: { value: number; onChange: (n:
 const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
-export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "" }: { obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string }) {
+export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [demoSources, setSources] = useState(initialSources);
   const sources: Source[] = obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [obsError, setObsError] = useState("");
@@ -163,8 +163,10 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
   const [overlays, setOverlays] = useState<(number | null)[]>([11, null, null, null]);
   const [autoCut, setAutoCut] = useState(false);
   const [view, setView] = useState<"Inputs" | "Mixer" | "Ambos">("Ambos");
-  const [recording, setRecording] = useState(false);
-  const [streaming, setStreaming] = useState(false);
+  const [demoRecording, setDemoRecording] = useState(false);
+  const [demoStreaming, setDemoStreaming] = useState(false);
+  const recording = obsConnected ? obsRecording : demoRecording;
+  const streaming = obsConnected ? obsStreaming : demoStreaming;
   const [elapsed, setElapsed] = useState(0);
   const [clock, setClock] = useState("--:--:--");
   const [bus, setBus] = useState({ master: 78, fone: 60, a: 70, b: 70, masterMute: false });
@@ -552,7 +554,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
       <footer className="flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-2">
         <button onClick={addInput} className={cn(btn, "h-7 px-4")}><Plus className="h-3.5 w-3.5" />Adicionar input</button>
         <div className="flex">
-          <button onClick={() => setRecording(!recording)}
+          <button onClick={() => { if (obsConnected) { if (!obsToggleRecording || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleRecording().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoRecording(!demoRecording); }}
             className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", recording && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
             <span className={cn("h-2 w-2 rounded-full bg-tally-pgm", recording && "animate-pulse bg-destructive-foreground")} />
             {recording ? `Gravando ${fmtElapsed(elapsed)}` : "Gravar"}
@@ -560,7 +562,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
           <button className={cn(btn, "h-7 rounded-l-none border-l-0 px-3")}>H <ChevronDown className="h-3 w-3" /></button>
         </div>
         <div className="flex">
-          <button onClick={() => setStreaming(!streaming)}
+          <button onClick={() => { if (obsConnected) { if (!obsToggleStreaming || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleStreaming().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoStreaming(!demoStreaming); }}
             className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", streaming && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
             <Radio className="h-3.5 w-3.5" />{streaming ? "Encerrar" : "Transmitir"}
           </button>
@@ -571,7 +573,7 @@ export function Switcher({ obsScenes = [], obsConnected = false, obsTake, obsPre
         <button className={cn(btn, "h-7 px-3")}>Checar saída</button>
         <div className="ml-auto flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
           <span className="rounded border border-border px-3 py-1"><Activity className="mr-1 inline h-3 w-3 text-primary" />30 fps · CPU {12 + Math.round((levels["master"] ?? 0) * 8)}%</span>
-          <span className="flex items-center gap-1"><Wifi className={cn("h-3 w-3", streaming ? "text-tally-pvw" : "")} />RTMP {streaming ? "conectado" : "ocioso"}</span>
+          <span className="flex items-center gap-1"><Wifi className={cn("h-3 w-3", streaming ? "text-tally-pvw" : "")} />RTMP {streaming ? "transmitindo via OBS" : "ocioso"}</span>
           <span>PTZ · inativo</span>
         </div>
       </footer>
