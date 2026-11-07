@@ -161,7 +161,7 @@ function Fader({ value, onChange, level, label }: { value: number; onChange: (n:
 const toDb = (v: number) => (v === 0 ? "-∞" : ((v - 75) * 0.4).toFixed(1));
 
 /* ---------- Main ---------- */
-export function Switcher({ nativeSources = [], nativeProgram = null, nativeCut, nativeRecord, nativeRecording = false, nativeAdd, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeCut?: (id: string) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
+export function Switcher({ nativeSources = [], nativeProgram = null, nativeCut, nativeFade, nativeRecord, nativeRecording = false, nativeAdd, obsScenes = [], obsConnected = false, obsTake, obsPrepare, obsProgram = "", obsPreview = "", obsRecording = false, obsStreaming = false, obsToggleRecording, obsToggleStreaming }: { nativeSources?: { id: string; name: string; stream: MediaStream }[]; nativeProgram?: string | null; nativeCut?: (id: string) => void; nativeFade?: (id: string, durationMs: number) => void; nativeRecord?: () => Promise<void>; nativeRecording?: boolean; nativeAdd?: () => Promise<void>; obsScenes?: string[]; obsConnected?: boolean; obsTake?: (scene: string, mode: "cut" | "auto", durationMs: number) => Promise<void>; obsPrepare?: (scene: string) => Promise<void>; obsProgram?: string; obsPreview?: string; obsRecording?: boolean; obsStreaming?: boolean; obsToggleRecording?: () => Promise<void>; obsToggleStreaming?: () => Promise<void> }) {
   const [demoSources, setSources] = useState(initialSources);
   const sources: Source[] = nativeSources.length ? nativeSources.map((source, i) => ({ ...initialSources[0], id: i + 1, name: source.name, type: "Fonte wMix", remaining: "" })) : obsConnected ? obsScenes.map((name, i) => ({ ...initialSources[0], id: i + 1, name, type: "Cena OBS", remaining: "" })) : demoSources;
   const [obsError, setObsError] = useState("");
@@ -230,7 +230,7 @@ export function Switcher({ nativeSources = [], nativeProgram = null, nativeCut, 
   }, [complete, obsConnected, obsTake, obsBusy, previewId, currentPreviewId, obsPreview, sources, nativeSources, nativeCut, currentProgramId]);
 
   const auto = useCallback(() => {
-    if (nativeSources.length && nativeCut) { const source = nativeSources[previewId - 1]; if (source) nativeCut(source.id); return; }
+    if (nativeSources.length && nativeFade) { const source = nativeSources[previewId - 1]; if (source) { nativeFade(source.id, Math.round(durations[transition] * 1000)); setPreviewId(currentProgramId || previewId); } return; }
     if (obsConnected) {
       const scene = sources.find(s => s.id === previewId)?.name;
       if (!scene || !obsTake || obsBusy) return;
@@ -251,7 +251,7 @@ export function Switcher({ nativeSources = [], nativeProgram = null, nativeCut, 
       }
     };
     animRef.current = requestAnimationFrame(step);
-  }, [durations, transition, complete, obsConnected, obsTake, obsBusy, previewId, sources, nativeSources, nativeCut]);
+  }, [durations, transition, complete, obsConnected, obsTake, obsBusy, previewId, sources, nativeSources, nativeFade, currentProgramId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
