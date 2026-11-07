@@ -66,19 +66,29 @@ impl OutputSession {
         Ok(self.state)
     }
     pub fn stop(&mut self) -> Result<(), String> {
-        if self.child.is_none() {
-            self.state = OutputState::Idle;
-            return Ok(());
-        }
         self.state = OutputState::Stopping;
-        if let Some(mut child) = self.child.take() {
-            // Bounded termination: kill/wait prevents orphan encoder processes.
-            if child.try_wait().map_err(|_| "Falha ao consultar encoder")?.is_none() {
-                child.kill().map_err(|_| "Falha ao interromper encoder")?;
+        if let Some(child) = self.child.as_mut() {
+            // Keep ownership until termination succeeds so failures can be retried.
+            let running = match child.try_wait() {
+                Ok(Some(_)) => false,
+                Ok(None) => true,
+                Err(_) => {
+                    self.fail("Falha ao consultar encoder");
+                    return Err("Falha ao consultar encoder".into());
+                }
+            };
+            if running && child.kill().is_err() {
+                self.fail("Falha ao interromper encoder");
+                return Err("Falha ao interromper encoder".into());
             }
-            child.wait().map_err(|_| "Falha ao aguardar encerramento")?;
+            if child.wait().is_err() {
+                self.fail("Falha ao aguardar encerramento");
+                return Err("Falha ao aguardar encerramento".into());
+            }
+            self.child = None;
         }
         self.state = OutputState::Idle;
+        self.last_error = None;
         Ok(())
     }
 }
@@ -117,6 +127,15 @@ mod tests {
         let mut s = OutputSession::default();
         s.begin().unwrap();
         assert!(s.mark_live().is_err());
+    }
+    #[test]
+    fn stop_is_idempotent_and_clears_failure() {
+        let mut s = OutputSession::default();
+        s.fail("Falha de teste");
+        s.stop().unwrap();
+        s.stop().unwrap();
+        assert_eq!(s.state(), OutputState::Idle);
+        assert_eq!(s.last_error(), None);
     }
     #[test]
     fn snapshots_use_expected_state_names() {
