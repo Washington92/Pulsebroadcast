@@ -59,6 +59,7 @@ export default function App() {
   const videoFile = useRef<HTMLInputElement>(null);
   const [selectedVideo, setSelectedVideo] = useState("");
   const [showInputPicker, setShowInputPicker] = useState(false);
+  const [splashVisible, setSplashVisible] = useState(true);
   const [inputSearch, setInputSearch] = useState("");
   const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
@@ -250,6 +251,15 @@ export default function App() {
     }
   }
   return <>
+    {splashVisible && <div role="status" aria-label="Inicializando wMix" className="fixed inset-0 z-[300] flex items-center justify-center bg-[#080a0d] text-white">
+      <div className="flex flex-col items-center gap-5 text-center">
+        <div className="grid h-28 w-28 place-items-center rounded-[22px] border border-white/10 bg-[#050505] shadow-2xl shadow-black"><span className="text-4xl font-extrabold tracking-[-0.08em]">w<span className="text-[#46ed63]">M</span>ix</span></div>
+        <div><h1 className="text-2xl font-semibold tracking-tight">wMix</h1><p className="mt-1 text-xs tracking-[0.18em] text-slate-400">LIVE PRODUCTION</p></div>
+        <div className="h-1 w-44 overflow-hidden rounded-full bg-white/10"><div className="h-full w-1/2 animate-pulse rounded-full bg-slate-400" /></div>
+        <p className="text-[10px] text-slate-500">Powered by Ton Dantas</p>
+        <button type="button" onClick={() => setSplashVisible(false)} className="rounded-md border border-white/20 bg-white/10 px-5 py-2 text-xs text-white hover:bg-white/20">Abrir mesa de produção</button>
+      </div>
+    </div>}
     <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeAdd={async () => { setShowInputPicker(true); }} nativeRemove={id => engine.remove(id)} nativeRename={(id, name) => engine.renameSource(id, name)} nativeRecord={toggleRecording} nativeRecording={recording} />
     <input ref={videoFile} type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" className="hidden" aria-label="Selecionar arquivo de vídeo" onChange={e => void addVideoFile(e.target.files?.[0])} />
     <input ref={imageFile} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" className="hidden" aria-label="Selecionar imagem para input" onChange={e => void addImage(e.target.files?.[0])} />
