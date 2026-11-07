@@ -6,12 +6,15 @@ export class WmixAudioEngine {
   private destination: MediaStreamAudioDestinationNode | null = null;
   private channels = new Map<string, Channel>();
   private cueDestination: MediaStreamAudioDestinationNode | null = null;
+  private masterGain: GainNode | null = null;
+  private masterVolume = 0.78;
+  private masterMuted = false;
   private cueMonitor: HTMLAudioElement | null = null;
   private cueGains = new Map<string, GainNode>();
   private raf = 0;
   onChange?: (inputs: AudioInput[]) => void;
   private ensureContext() {
-    if (!this.context) { this.context = new AudioContext(); this.destination = this.context.createMediaStreamDestination(); this.cueDestination = this.context.createMediaStreamDestination(); }
+    if (!this.context) { this.context = new AudioContext(); this.destination = this.context.createMediaStreamDestination(); this.cueDestination = this.context.createMediaStreamDestination(); this.masterGain = this.context.createGain(); this.masterGain.gain.value = this.masterVolume; this.masterGain.connect(this.destination); }
     void this.context.resume();
     return this.context;
   }
@@ -28,7 +31,7 @@ export class WmixAudioEngine {
     const source = ctx.createMediaStreamSource(stream);
     const gain = ctx.createGain();
     const analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
-    source.connect(analyser); analyser.connect(gain); gain.connect(this.destination!);
+    source.connect(analyser); analyser.connect(gain); gain.connect(this.masterGain!);
     const cueGain = ctx.createGain(); cueGain.gain.value = 0;
     analyser.connect(cueGain); cueGain.connect(this.cueDestination!);
     this.cueGains.set(id, cueGain);
@@ -48,6 +51,11 @@ export class WmixAudioEngine {
     const ch = this.channels.get(id); if (!ch) return;
     ch.input.muted = muted; ch.gain.gain.value = muted ? 0 : ch.input.volume;
     this.emit();
+  }
+  setMaster(volume: number, muted: boolean) {
+    this.masterVolume = Math.max(0, Math.min(1, volume));
+    this.masterMuted = muted;
+    if (this.masterGain && this.context) this.masterGain.gain.setTargetAtTime(muted ? 0 : this.masterVolume, this.context.currentTime, 0.01);
   }
   async enableCueMonitor() {
     this.ensureContext();
@@ -95,6 +103,6 @@ export class WmixAudioEngine {
     cancelAnimationFrame(this.raf); this.raf = 0;
     for (const id of [...this.channels.keys()]) this.remove(id);
     if (this.cueMonitor) { this.cueMonitor.pause(); this.cueMonitor.srcObject = null; this.cueMonitor = null; }
-    void this.context?.close(); this.context = null; this.destination = null; this.cueDestination = null;
+    void this.context?.close(); this.context = null; this.destination = null; this.cueDestination = null; this.masterGain = null;
   }
 }
