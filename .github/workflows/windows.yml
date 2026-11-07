@@ -2,6 +2,10 @@ name: Windows desktop build
 on:
   # Full installer builds are explicit release-candidate checks, not per-commit builds.
   workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/windows.yml'
 jobs:
   desktop:
     runs-on: windows-latest
