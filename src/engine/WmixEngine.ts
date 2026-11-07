@@ -6,7 +6,7 @@ export class WmixEngine {
   private videos = new Map<string, HTMLVideoElement>();
   private canvas: HTMLCanvasElement | null = null;
   private previewCanvas: HTMLCanvasElement | null = null;
-  private previewScene: { overlay: string | null; layout: PipLayout } | null = null;
+  private previewScene: { base: string | null; overlay: string | null; layout: PipLayout } | null = null;
   private frame = 0;
   private program: string | null = null;
   private overlay: string | null = null;
@@ -46,8 +46,8 @@ export class WmixEngine {
     this.draw();
   }
   attachPreview(canvas: HTMLCanvasElement | null) { this.previewCanvas = canvas; }
-  prepareScene(overlay: string | null, layout: PipLayout) {
-    this.previewScene = { overlay, layout: { ...layout } };
+  prepareScene(base: string | null, overlay: string | null, layout: PipLayout) {
+    this.previewScene = { base, overlay, layout: { ...layout } };
   }
   clearPreview() { this.previewScene = null; this.previewCanvas = null; }
   private paintPip(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, overlay: string | null, layout: PipLayout) {
@@ -71,7 +71,7 @@ export class WmixEngine {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.fillStyle = '#080c13'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const video = this.program ? this.videos.get(this.program) : null;
+    const video = scene.base ? this.videos.get(scene.base) : null;
     if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth) {
       const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
       const w = video.videoWidth * scale, h = video.videoHeight * scale;
