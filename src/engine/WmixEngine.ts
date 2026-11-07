@@ -97,6 +97,40 @@ export class WmixEngine {
     const stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
     return this.addStream(stream, 'Câmera');
   }
+  /** Refresh a camera stream without changing its scene/source ID. */
+  async reconnectCamera(id: string, deviceId?: string) {
+    const source = this.sources.get(id);
+    if (!source) throw new Error("Fonte não encontrada para reconexão");
+    if (!source.stream.getVideoTracks().length) throw new Error("A fonte não é uma câmera");
+    const previousTrack = source.stream.getVideoTracks()[0];
+    const targetDevice = deviceId ?? previousTrack.getSettings?.().deviceId;
+    const replacement = await navigator.mediaDevices.getUserMedia({
+      video: targetDevice ? { deviceId: { exact: targetDevice } } : true,
+      audio: false,
+    });
+    // A pending permission prompt may outlive the source's removal.
+    if (this.sources.get(id) !== source) {
+      replacement.getTracks().forEach(track => track.stop());
+      throw new Error("A fonte foi removida durante a reconexão");
+    }
+    const video = this.videos.get(id);
+    if (!video) {
+      replacement.getTracks().forEach(track => track.stop());
+      throw new Error("Vídeo da fonte indisponível");
+    }
+    source.stream = replacement;
+    source.name = replacement.getVideoTracks()[0]?.label || source.name;
+    video.srcObject = replacement;
+    void video.play().catch(() => {});
+    replacement.getVideoTracks().forEach(track => track.addEventListener("ended", () => {
+      if (this.sources.get(id)?.stream === replacement) this.remove(id);
+    }, { once: true }));
+    // Stop only after the replacement is attached; old ended events are ignored.
+    const previous = previousTrack;
+    if (previous) previous.stop();
+    this.onSourcesChanged?.();
+    return id;
+  }
   async addScreen() {
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
     return this.addStream(stream, 'Tela');
