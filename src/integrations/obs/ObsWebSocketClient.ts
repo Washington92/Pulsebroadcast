@@ -46,7 +46,9 @@ export class ObsWebSocketClient {
 
   async connect(url: string, password = ""): Promise<void> {
     this.disconnect();
-    const parsed = new URL(url);
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { throw new Error("Invalid OBS WebSocket URL."); }
+    if (parsed.username || parsed.password || parsed.hash) throw new Error("OBS URL cannot contain credentials or a fragment.");
     if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") throw new Error("OBS requires a ws:// or wss:// URL.");
     const generation = ++this.generation;
     const socket = new WebSocket(parsed.toString());
@@ -54,6 +56,7 @@ export class ObsWebSocketClient {
     return new Promise<void>((resolve, reject) => {
       let settled = false;
       const fail = (reason: Error) => {
+        clearTimeout(timeout);
         if (!settled) { settled = true; reject(reason); }
         if (this.socket === socket) this.disconnect();
       };
@@ -65,7 +68,7 @@ export class ObsWebSocketClient {
           if (message.op === 0) {
             const auth = message.d?.authentication as { salt?: string; challenge?: string } | undefined;
             if (auth && (!password || !auth.salt || !auth.challenge)) throw new Error("OBS authentication credentials are required.");
-            const identify: Record<string, unknown> = { rpcVersion: 1, eventSubscriptions: 1 << 2 };
+            const identify: Record<string, unknown> = { rpcVersion: 1, eventSubscriptions: (1 << 2) | (1 << 10) };
             if (auth) identify.authentication = await authentication(password, auth.salt!, auth.challenge!);
             socket.send(JSON.stringify({ op: 1, d: identify }));
           } else if (message.op === 2) {
@@ -104,8 +107,19 @@ export class ObsWebSocketClient {
       return Promise.reject(new Error("OBS is not connected."));
     const id = String(++this.sequence);
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-      socket.send(JSON.stringify({ op: 6, d: { requestType: type, requestId: id, requestData: data } }));
+      const timeout = setTimeout(() => {
+        if (this.pending.delete(id)) reject(new Error("OBS request timed out."));
+      }, 10000);
+      this.pending.set(id, {
+        resolve: value => { clearTimeout(timeout); resolve(value); },
+        reject: error => { clearTimeout(timeout); reject(error); }
+      });
+      try { socket.send(JSON.stringify({ op: 6, d: { requestType: type, requestId: id, requestData: data } })); }
+      catch (error) {
+        this.pending.delete(id);
+        clearTimeout(timeout);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
