@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Switcher } from "./components/pulse/Switcher";
+import { NativeEnginePanel } from "./components/pulse/NativeEnginePanel";
 import { ObsConnectionPanel } from "./components/pulse/ObsConnectionPanel";
 import { WmixEngine, type PipLayout, type WmixSource } from "./engine/WmixEngine";
 import { WmixAudioEngine, type AudioInput } from "./engine/WmixAudioEngine";
