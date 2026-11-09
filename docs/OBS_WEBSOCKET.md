@@ -12,7 +12,7 @@ Arquivo: `src/integrations/obs/ObsWebSocketClient.ts`.
 - Desconexão com rejeição das solicitações pendentes.
 
 ## Limites
-O adaptador **ainda não está conectado à interface**. Não comanda CUT/TAKE no OBS, não transfere vídeo do OBS para o Canvas, não implementa reconexão automática e possui timeout individual de 10 segundos por requisição, mas ainda não implementa reconexão automática. O Preview/Program do Canvas permanece independente.
+O adaptador agora está conectado a um painel opcional na interface, com status e consulta de cenas. O painel não comanda CUT/TAKE no OBS, não transfere vídeo do OBS para o Canvas, não implementa reconexão automática e possui timeout individual de 10 segundos por requisição, mas ainda não implementa reconexão automática. O Preview/Program do Canvas permanece independente.
 
 Credenciais são fornecidas apenas em memória. **Não salve senhas em localStorage, URL, logs ou repositório.** Para aplicativos web hospedados em HTTPS, o navegador pode bloquear `ws://` por conteúdo misto. O ambiente Tauri/Windows e a conectividade com OBS real ainda exigem validação.
 
@@ -33,3 +33,7 @@ obs.disconnect();
 3. Ativar/desativar Studio Mode e alternar Preview/Program; verificar eventos e refresh.
 4. Desligar OBS durante uma requisição; conferir rejeição e limpeza.
 5. Testar Windows 10/11 no Tauri; nunca considerar build web equivalente a teste desktop.
+
+## Painel visual (develop)
+
+O componente `src/components/pulse/ObsConnectionPanel.tsx` foi montado em `src/App.tsx`. Exibe status de conexão, endereço e senha (somente memória), OBS Preview e OBS Program, além de atualizar/desconectar. O compositor Canvas do wMix não é alterado. Ainda não há teste com OBS real nem confirmação de build após essa integração.
