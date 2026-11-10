@@ -25,7 +25,7 @@ export function NativeEnginePanel() {
     catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   }
-  return <section className="fixed bottom-2 left-3 z-[130] max-w-[95vw] rounded-lg border border-border bg-card p-2 text-xs text-foreground shadow-lg" aria-label="Motor nativo libobs">
+  return <section className="fixed bottom-2 right-3 z-[130] max-w-[95vw] rounded-lg border border-border bg-card p-2 text-xs text-foreground shadow-lg" aria-label="Motor nativo libobs">
     <div className="mb-1 flex items-center gap-2">
       <strong>Motor libobs</strong>
       <span role="status">{!invoke ? "Somente no desktop Tauri" : status?.initialized ? "Inicializado (sem vídeo)" : "Desligado"}</span>
