@@ -22,3 +22,9 @@ O backend Rust tenta carregar `obs.dll`, resolve os símbolos `obs_startup`, `ob
 - Testar em Windows 10/11 com GPU e dispositivos reais, e empacotar bibliotecas/plugins com respeito à GPL.
 
 A branch `main` deve continuar estável. Nenhum build, screenshot ou teste real da libobs foi executado nesta sessão.
+
+## Incremento: ciclo de vida e diagnóstico
+O runtime preserva a versão detectada para consultas posteriores de `libobs_status` e inclui limpeza de último recurso no encerramento do processo Tauri (Drop). `stop_libobs` continua sendo a forma preferida de encerramento ordenado. Foi adicionado teste unitário de encerramento idempotente sem inicialização. Nenhum desses comportamentos foi validado em Windows nesta sessão.
+
+## Bloqueio de validação
+A tentativa de clonar o repositório via Git HTTPS neste ambiente falhou por resolução DNS (`Could not resolve host: github.com`). Os arquivos foram lidos e alterados pela integração GitHub, mas não foi possível executar `npm ci`, `npm run build`, `cargo test` ou validar o carregamento real da DLL. Não considerar a integração pronta até CI e testes manuais passarem.
