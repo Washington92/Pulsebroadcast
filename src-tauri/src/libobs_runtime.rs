@@ -15,6 +15,7 @@ struct LoadedObs {
     // Library must outlive any function pointer resolved from it.
     library: Library,
     shutdown: ObsShutdown,
+    version: String,
 }
 
 #[derive(Default)]
@@ -70,7 +71,7 @@ impl LibobsRuntime {
             if ptr.is_null() { "desconhecida".into() }
             else { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
         };
-        *loaded = Some(LoadedObs { library, shutdown });
+        *loaded = Some(LoadedObs { library, shutdown, version: version_text.clone() });
         Ok(LibobsRuntimeStatus {
             initialized: true,
             version: Some(version_text),
@@ -93,10 +94,24 @@ impl LibobsRuntime {
     fn status(&self) -> Result<LibobsRuntimeStatus, String> {
         let loaded = self.loaded.lock().map_err(|_| "Estado libobs indisponível")?;
         Ok(LibobsRuntimeStatus {
-            initialized: loaded.is_some(), version: None,
+            initialized: loaded.is_some(), version: loaded.as_ref().map(|runtime| runtime.version.clone()),
             message: if loaded.is_some() { "libobs inicializada (sem pipeline de mídia).".into() }
                      else { "libobs não inicializada.".into() }
         })
+    }
+}
+
+impl Drop for LibobsRuntime {
+    fn drop(&mut self) {
+        // Ensure native OBS resources are released before unloading the DLL.
+        // This is a last-resort cleanup, not a replacement for orderly stop_libobs.
+        if let Ok(loaded) = self.loaded.get_mut() {
+            if let Some(runtime) = loaded.take() {
+                // SAFETY: the library remains loaded while shutdown executes.
+                unsafe { (runtime.shutdown)() };
+                drop(runtime.library);
+            }
+        }
     }
 }
 
@@ -121,6 +136,12 @@ mod tests {
     #[test]
     fn rejects_non_absolute_path() {
         assert!(LibobsRuntime::default().start("obs.dll".into()).is_err());
+    }
+    #[test]
+    fn stopping_uninitialized_runtime_is_idempotent() {
+        let runtime = LibobsRuntime::default();
+        assert!(!runtime.stop().unwrap().initialized);
+        assert!(!runtime.status().unwrap().initialized);
     }
     #[test]
     fn starts_stopped() {
