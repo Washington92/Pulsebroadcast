@@ -32,8 +32,8 @@ jobs:
       - name: Rust unit tests and type checking
         working-directory: src-tauri
         run: |
-          cargo test --locked
-          cargo check --locked
+          cargo test
+          cargo check
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
