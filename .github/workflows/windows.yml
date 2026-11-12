@@ -5,6 +5,15 @@ on:
     branches: [develop]
     paths:
       - '.github/workflows/windows.yml'
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'index.html'
+      - 'vite.config.*'
+      - 'tsconfig*.json'
 jobs:
   desktop:
     runs-on: windows-latest
@@ -19,6 +28,12 @@ jobs:
           workspaces: src-tauri -> target
       - run: npm install --no-audit --no-fund
       - run: npm test
+      - run: npm run build
+      - name: Rust unit tests and type checking
+        working-directory: src-tauri
+        run: |
+          cargo test --locked
+          cargo check --locked
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
