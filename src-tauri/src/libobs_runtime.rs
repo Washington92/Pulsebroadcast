@@ -144,6 +144,20 @@ mod tests {
         assert!(!runtime.status().unwrap().initialized);
     }
     #[test]
+    fn rejects_unrelated_dll_before_loading() {
+        let runtime = LibobsRuntime::default();
+        let path = if cfg!(windows) { r"C:\\Windows\\System32\\kernel32.dll" } else { "/usr/lib/other.dll" };
+        assert!(runtime.start(path.into()).is_err());
+        assert!(!runtime.status().unwrap().initialized);
+    }
+    #[test]
+    fn rejects_missing_absolute_obs_dll() {
+        let runtime = LibobsRuntime::default();
+        let path = if cfg!(windows) { r"C:\\wmix-test-nonexistent\\obs.dll" } else { "/wmix-test-nonexistent/obs.dll" };
+        assert!(runtime.start(path.into()).is_err());
+        assert!(!runtime.status().unwrap().initialized);
+    }
+    #[test]
     fn starts_stopped() {
         assert!(!LibobsRuntime::default().status().unwrap().initialized);
     }
