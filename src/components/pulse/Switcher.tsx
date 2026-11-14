@@ -212,6 +212,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const [programId, setProgramId] = useState(0);
   const [previewId, setPreviewId] = useState(0);
   const [transition, setTransition] = useState<TransitionType>("Fade");
+  const [safeAreas, setSafeAreas] = useState(false);
   const [durations, setDurations] = useState<Record<TransitionType, number>>({ Fade: 0.5, Merge: 1, Wipe: 1, Slide: 1 });
   const [progress, setProgress] = useState(0);
   const [ftb, setFtb] = useState(false);
@@ -398,6 +399,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
           </div>
           <div className="relative mx-2 min-h-0 flex-1 overflow-hidden rounded bg-background">
             {renderFrame(pvw)}
+            {safeAreas && <div aria-hidden="true" className="pointer-events-none absolute inset-[5%] z-10 border border-dashed border-white/70"><div className="absolute inset-[5.55%] border border-dashed border-white/70" /></div>}
             {editPreview && nativeGetTransform && nativeSetTransform && (() => {
               const selected = nativeSources[currentPreviewId - 1];
               if (!selected) return null;
@@ -448,20 +450,29 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
           </div>
           <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2">
             <div className="flex min-w-0 flex-col gap-2">
-              <button onClick={auto} className="flex min-h-12 flex-col justify-center rounded-md bg-primary px-3 py-2 text-left text-primary-foreground hover:brightness-110">
-                <div className="flex items-center justify-between gap-2"><span className="text-base font-bold">AUTO</span><span className="text-[10px] opacity-80">Enter</span></div>
-                <span className="block truncate text-[10px]" title={pvw?.name || "Sem fonte"}>{pvw?.name || "Sem fonte"} · {transition} {durations[transition]}s</span>
-              </button>
-              <button onClick={cut} className="flex min-h-11 items-center justify-between rounded-md border border-border bg-secondary px-3 py-2 text-left hover:bg-accent">
-                <span className="text-base font-bold">CUT</span><span className="text-[10px] text-muted-foreground">Espaço</span>
-              </button>
-              <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Tipo de transição">
-                {(Object.keys(durations) as TransitionType[]).map((t) => (
-                  <div key={t} className={cn("flex min-w-0 items-center rounded-md border", transition === t ? "border-primary bg-primary/10" : "border-border bg-secondary")}>
-                    <button type="button" onClick={() => setTransition(t)} aria-pressed={transition === t} className={cn("min-w-0 flex-1 px-1 py-2 text-left text-[10px] font-semibold", transition === t && "text-primary")}>{t}</button>
-                    <input type="number" step={0.1} min={0.1} max={5} value={durations[t]} aria-label={`Duração de ${t} em segundos`} onChange={e => setDurations(d => ({...d, [t]: Math.max(0.1, Math.min(5, Number(e.target.value) || 0.1))}))} className="w-7 shrink-0 appearance-none border-l border-border bg-transparent py-2 pr-1 text-right font-mono text-[10px] text-muted-foreground focus-visible:outline-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
-                  </div>
-                ))}
+              <span className="text-xs font-semibold">Transições</span>
+              <div className="grid grid-cols-3 gap-1" role="group" aria-label="Tipo de transição">
+                {(["Merge", "Fade", "Slide", "Wipe", "Stinger", "Push", "Zoom", "Blur", "Circle Wipe", "Flip"] as const).map(effect => {
+                  const available = effect === "Fade" || (!nativeAdd && !obsConnected && (effect === "Merge" || effect === "Slide" || effect === "Wipe"));
+                  const label = effect === "Merge" ? "Mix" : effect;
+                  return <button key={effect} type="button" disabled={!available}
+                    title={available ? label : label + " — indisponível neste modo"}
+                    aria-pressed={available && transition === effect}
+                    onClick={() => { if (available) setTransition(effect); }}
+                    className={cn("min-h-8 rounded border px-0.5 text-[10px] font-semibold disabled:opacity-40", available && transition === effect ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary")}>
+                    {label}
+                  </button>;
+                })}
+              </div>
+              <label className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
+                Duração (s)
+                <input type="number" step={0.1} min={0.1} max={5} value={durations[transition]}
+                  onChange={event => setDurations({ ...durations, [transition]: Math.max(0.1, Math.min(5, Number(event.target.value) || 0.1)) })}
+                  className="w-14 rounded border border-border bg-background px-1 py-1 text-right font-mono" />
+              </label>
+              <div className="grid grid-cols-2 gap-1">
+                <button onClick={auto} title="Transição automática · Enter" className="min-h-10 rounded bg-primary text-xs font-bold text-primary-foreground">AUTO</button>
+                <button onClick={cut} title="Corte imediato · Espaço" className="min-h-10 rounded border border-border bg-secondary text-xs font-bold hover:bg-accent">CUT</button>
               </div>
             </div>
             <div className="flex min-w-0 flex-col items-center rounded-md border border-border/60 bg-background/40 px-1 py-2">
@@ -474,8 +485,9 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
               <span className="mt-2 font-mono text-[10px] text-muted-foreground">{Math.round(progress * 100)}%</span>
             </div>
           </div>
-          <div className="border-t border-border/60 pt-2">
-            <button onClick={() => setFtb(!ftb)} aria-pressed={ftb} className={cn("flex h-9 w-full items-center justify-center gap-2 rounded-md border text-xs font-bold", ftb ? "border-tally-pgm bg-tally-pgm text-destructive-foreground" : "border-border bg-secondary hover:bg-accent")}><Square className="h-3.5 w-3.5" />FTB · Fade to Black</button>
+          <div className="grid grid-cols-2 gap-1 border-t border-border/60 pt-2">
+            <button onClick={() => setFtb(!ftb)} aria-pressed={ftb} className={cn("flex h-9 w-full items-center justify-center gap-2 rounded-md border text-xs font-bold", ftb ? "border-tally-pgm bg-tally-pgm text-destructive-foreground" : "border-border bg-secondary hover:bg-accent")}><Square className="h-3.5 w-3.5" />FTB</button>
+            <button type="button" onClick={() => setSafeAreas(value => !value)} aria-pressed={safeAreas} className={cn(btn, "h-9 px-1 text-[10px]", safeAreas && "border-primary text-primary")}>Safe Areas</button>
           </div>
           <div className="space-y-1.5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sobreposições</div>
@@ -502,6 +514,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
           </div>
           <div className="relative mx-2 min-h-0 flex-1 overflow-hidden rounded bg-background">
             {renderProgram("absolute inset-0")}
+            {safeAreas && <div aria-hidden="true" className="pointer-events-none absolute inset-[5%] z-10 border border-dashed border-white/70"><div className="absolute inset-[5.55%] border border-dashed border-white/70" /></div>}
             {progress > 0 && <div className="absolute inset-0" style={incoming}><Frame s={pvw} /></div>}
             <LowerThird show={titleOnAir} />
             <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
