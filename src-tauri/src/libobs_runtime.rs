@@ -49,8 +49,23 @@ impl LibobsRuntime {
 
         // SAFETY: the caller explicitly selects a trusted DLL. This is NOT a sandbox:
         // loading a DLL executes native code. Keep the library alive until shutdown.
-        let library = unsafe { Library::new(&canonical) }
-            .map_err(|e| format!("Não foi possível carregar libobs e dependências: {e}"))?;
+        #[cfg(windows)]
+        let library = unsafe {
+            use libloading::os::windows::{
+                Library as WindowsLibrary, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+                LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+            };
+            WindowsLibrary::load_with_flags(
+                &canonical,
+                LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+            )
+            .map(Library::from)
+        };
+        #[cfg(not(windows))]
+        let library = unsafe { Library::new(&canonical) };
+        let library = library.map_err(|e| {
+            format!("Não foi possível carregar {} e suas dependências: {e}", canonical.display())
+        })?;
         let (startup, shutdown, version) = unsafe {
             let startup: ObsStartup = *library.get::<ObsStartup>(b"obs_startup\0")
                 .map_err(|e| format!("obs_startup ausente: {e}"))?;
