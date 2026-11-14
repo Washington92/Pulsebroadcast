@@ -22,3 +22,7 @@
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--muted-foreground) / 0.55) hsl(var(--panel));
 }
+
+.wmix-toolbar button { border-radius: 8px; }
+.wmix-toolbar button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
+.wmix-toolbar button:active { filter: brightness(0.85); }

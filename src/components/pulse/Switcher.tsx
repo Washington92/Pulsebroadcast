@@ -315,7 +315,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
     <div className="flex h-screen min-h-0 min-w-[900px] flex-col gap-1.5 overflow-hidden bg-background p-2 font-sans text-foreground">
       {obsError && <div role="alert" className="rounded bg-red-900 px-3 py-1 text-xs text-white">Erro de transmissão: {obsError}</div>}
       {/* ===== Top bar ===== */}
-      <header className="flex h-10 shrink-0 items-center gap-1.5 border-b border-border/60 pb-1">
+      <header className="wmix-toolbar flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 bg-panel px-3 py-2">
         <div className="flex items-center gap-2 border-r border-border/70 pr-3">
           <div className="relative grid h-7 w-7 place-items-center rounded-md border border-border bg-secondary">
             <span className="text-xs font-black italic text-primary">w</span>
@@ -327,25 +327,25 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
             {streaming ? "AO VIVO" : "PRONTO"}
           </span>
         </div>
-        <button className={cn(btn, "h-8 shrink-0 justify-between px-2")}>
+        <button className={cn(btn, "h-9 shrink-0 justify-between px-2")}>
           <span className="flex items-center gap-1.5 whitespace-nowrap"><FolderOpen className="h-3.5 w-3.5" />Show de lançamento</span>
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
-        <nav aria-label="Áreas de trabalho" className="flex min-w-0 gap-0.5 overflow-x-auto rounded-lg border border-border bg-panel p-0.5">
+        <nav aria-label="Áreas de trabalho" className="order-last flex min-w-0 basis-full gap-0.5 overflow-x-auto rounded-lg bg-background/70 p-1 2xl:order-none 2xl:basis-auto">
           {tabs.map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              aria-pressed={tab === t} className={cn("h-7 shrink-0 rounded-md px-2.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground", tab === t && "bg-accent text-foreground")}>{t}</button>
+              aria-pressed={tab === t} className={cn("h-8 shrink-0 rounded-md px-3 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground", tab === t && "bg-accent text-foreground shadow-sm")}>{t}</button>
           ))}
         </nav>
-        <button onClick={() => setManual(!manual)}
-          className={cn(btn, "h-8 shrink-0 px-2", manual ? "border-warn text-warn" : "text-muted-foreground")}>
+        <button type="button" aria-pressed={manual} onClick={() => setManual(!manual)}
+          className={cn(btn, "h-9 shrink-0 px-3", manual ? "border-warn/60 bg-warn/10 text-warn" : "text-muted-foreground")}>
           <Hand className="h-3.5 w-3.5" />{manual ? "Manual ativo" : "Assumir manual"}
         </button>
-        <div className="ml-auto flex items-center gap-2">
-          <button className={cn(btn, "h-8 border-border/70 bg-secondary/60 px-3 text-muted-foreground")}><Sparkles className="h-3.5 w-3.5" />Copilot</button>
-          <button className={cn(btn, "h-8 w-8 px-0")} aria-label="Configurações"><Settings className="h-4 w-4" /></button>
-          <button type="button" onClick={onToggleAdvanced} aria-expanded={advancedOpen} aria-label="Controles avançados" title="Controles avançados" className={cn(btn, "h-8 gap-1 px-2", advancedOpen && "border-primary text-primary")}><SlidersHorizontal className="h-3.5 w-3.5" /><span className="hidden xl:inline">Avançado</span></button>
-          <button className={cn(btn, "h-8 shrink-0 justify-between px-2")}><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Conta</span><ChevronDown className="h-3.5 w-3.5" /></button>
+        <div className="ml-auto flex items-center gap-1 rounded-lg bg-background/60 p-1">
+          <button className={cn(btn, "h-9 border-transparent bg-transparent px-3 text-muted-foreground")}><Sparkles className="h-3.5 w-3.5" />Copilot</button>
+          <button className={cn(btn, "h-9 w-9 px-0")} aria-label="Configurações"><Settings className="h-4 w-4" /></button>
+          <button type="button" onClick={onToggleAdvanced} aria-expanded={advancedOpen} aria-label="Controles avançados" title="Controles avançados" className={cn(btn, "h-9 gap-1 px-2", advancedOpen && "border-primary text-primary")}><SlidersHorizontal className="h-3.5 w-3.5" /><span className="hidden xl:inline">Avançado</span></button>
+          <button className={cn(btn, "h-9 shrink-0 justify-between px-2")}><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Conta</span><ChevronDown className="h-3.5 w-3.5" /></button>
         </div>
       </header>
 
