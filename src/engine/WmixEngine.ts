@@ -256,7 +256,6 @@ export class WmixEngine {
       // Ignore delayed events after a source has already been removed.
       if (this.sources.get(id)?.stream === stream) this.handleTrackEnded(id);
     }, { once: true }));
-    if (!this.scenes.currentProgram()) this.setProgram(id);
     this.onSourcesChanged?.();
     return id;
   }

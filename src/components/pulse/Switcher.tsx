@@ -258,7 +258,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
 
   const cut = useCallback(() => {
     if (nativeAdd && nativeCut) {
-      const source = nativeSources[previewId - 1];
+      const source = nativeSources[currentPreviewId - 1];
       if (source) { nativeCut(source.id); setPreviewId(currentProgramId || previewId); }
       return;
     }
@@ -274,7 +274,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   }, [complete, obsConnected, obsTake, obsBusy, previewId, currentPreviewId, obsPreview, sources, nativeSources, nativeCut, currentProgramId]);
 
   const auto = useCallback(() => {
-    if (nativeAdd && nativeFade) { const source = nativeSources[previewId - 1]; if (source) { nativeFade(source.id, Math.round(durations[transition] * 1000)); setPreviewId(currentProgramId || previewId); } return; }
+    if (nativeAdd && nativeFade) { const source = nativeSources[currentPreviewId - 1]; if (source) { nativeFade(source.id, Math.round(durations[transition] * 1000)); setPreviewId(currentProgramId || previewId); } return; }
     if (obsConnected) {
       const scene = sources.find(s => s.id === previewId)?.name;
       if (!scene || !obsTake || obsBusy) return;
@@ -295,7 +295,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
       }
     };
     animRef.current = requestAnimationFrame(step);
-  }, [durations, transition, complete, obsConnected, obsTake, obsBusy, previewId, sources, nativeSources, nativeFade, currentProgramId]);
+  }, [durations, transition, complete, obsConnected, obsTake, obsBusy, previewId, currentPreviewId, sources, nativeSources, nativeFade, currentProgramId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -310,7 +310,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
 
   const onTbar = (v: number) => {
     if (nativeAdd && nativeManualTransition) {
-      const source = nativeSources[previewId - 1];
+      const source = nativeSources[currentPreviewId - 1];
       if (source) {
         nativeManualTransition(source.id, v);
         setProgress(v >= 1 ? 0 : v);

@@ -77,7 +77,8 @@ test("CUT replaces Program and cancels an active FADE", async () => {
   engine.attach(canvas());
   const first = await engine.addCamera();
   const second = await engine.addCamera();
-  assert.equal(engine.currentProgram(), first);
+  engine.setProgram(first);
+
   engine.transitionTo(second, 500);
   assert.equal(engine.isTransitioning(), true);
   engine.setProgram(first);
@@ -86,10 +87,20 @@ test("CUT replaces Program and cancels an active FADE", async () => {
   engine.dispose();
 });
 
+test("Adding a camera leaves Program empty until a take", async () => {
+  const { engine } = harness();
+  const camera = await engine.addCamera();
+  assert.equal(engine.currentProgram(), null);
+  engine.setProgram(camera);
+  assert.equal(engine.currentProgram(), camera);
+  engine.dispose();
+});
+
 test("Preview does not change Program and is cleared independently", async () => {
   const { engine, canvas } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   engine.prepareScene(second, null, { x: 0.5, y: 0.5, width: 0.3 });
   engine.attachPreview(canvas());
@@ -104,6 +115,7 @@ test("Disconnected Preview source is cleared without disturbing Program", async 
   const { engine, canvas } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   engine.prepareScene(second, second, { x: 0.5, y: 0.5, width: 0.3 });
   engine.remove(second);
@@ -117,6 +129,7 @@ test("Removing Program selects a remaining source", async () => {
   const { engine, canvas } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   engine.remove(first);
   assert.equal(engine.currentProgram(), second);
@@ -129,6 +142,7 @@ test("FADE keeps previous full scene available and completes after 500 ms", asyn
   const { engine, canvas, advance } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   engine.setOverlay(second);
   engine.setPipLayout({ x: 0.6, y: 0.6, width: 0.25 });
@@ -148,6 +162,7 @@ test("FADE remains safe when previous camera is disconnected", async () => {
   const { engine, canvas, advance } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   engine.transitionTo(second, 500);
   engine.remove(first);
@@ -164,6 +179,7 @@ test("Preview and Program can render distinct camera feeds simultaneously", asyn
   const { engine, canvas, calls } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   const third = await engine.addCamera();
   engine.setOverlay(second);
@@ -181,6 +197,7 @@ test("Camera disconnect keeps Program and source available for recovery", async 
   const { engine, canvas, tracks } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   await engine.addCamera();
   tracks[0].onEnded();
   assert.equal(engine.currentProgram(), first);
@@ -194,6 +211,7 @@ test("Disconnected overlay remains assigned for automatic recovery", async () =>
   const { engine, canvas, tracks } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   engine.setOverlay(second);
   tracks[1].onEnded();
@@ -208,6 +226,7 @@ test("SceneGraph returns isolated snapshots and preserves Program on Preview upd
   const { engine, canvas } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   engine.prepareScene(second, first, { x: 0.4, y: 0.4, width: 0.2 });
   const snapshot = engine.currentPreviewScene();
@@ -221,6 +240,7 @@ test("SceneGraph clears removed overlay but preserves other scene references", a
   const { engine, canvas } = harness();
   engine.attach(canvas());
   const first = await engine.addCamera();
+  engine.setProgram(first);
   const second = await engine.addCamera();
   engine.setOverlay(second);
   engine.prepareScene(first, second, { x: 0.3, y: 0.3, width: 0.2 });
