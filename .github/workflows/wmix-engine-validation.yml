@@ -1,0 +1,58 @@
+name: wMix engine validation (Windows)
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+      - '.github/workflows/wmix-engine-validation.yml'
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wmix-engine-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  rust:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: cargo test --locked
+        if: ${{ hashFiles('src-tauri/Cargo.lock') != '' }}
+      - run: cargo test
+        if: ${{ hashFiles('src-tauri/Cargo.lock') == '' }}
+      - run: cargo check
+      - name: Confirm libobs scope
+        shell: pwsh
+        run: Write-Host 'Static compile only; actual libobs startup, camera capture, Preview/Program and GPU require Windows hardware validation.'
