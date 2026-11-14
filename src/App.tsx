@@ -392,8 +392,6 @@ export default function App() {
       </div>
       <p className="absolute bottom-7 right-8 text-xs italic text-slate-400">Powered by <strong>Ton Dantas</strong></p>
     </div>}
-    <div className="fixed bottom-3 left-3 z-[110] w-80 max-w-[calc(100vw-1.5rem)]"><ObsConnectionPanel /></div>
-    <NativeEnginePanel />
     <Switcher nativeAudio={inputs} nativeAudioVolume={(id, volume) => audio.setVolume(id, volume)} nativeAudioMute={(id, muted) => audio.setMute(id, muted)} nativeAudioCue={(id, enabled) => audio.setCue(id, enabled)} nativeAudioRemove={id => audio.remove(id)} nativeMasterChange={(volume, muted) => audio.setMaster(volume, muted)} nativeBusVolume={(bus, volume) => audio.setBusVolume(bus, volume)} nativeBusSend={(id, bus, enabled) => audio.setBusSend(id, bus, enabled)} nativeSources={sources} nativeProgram={program} nativeProgramStream={programStream} nativeCut={id => engine.setProgram(id)} nativeFade={(id, ms) => engine.transitionTo(id, ms)} nativeManualTransition={(id, progress) => engine.setManualTransition(id, progress)} nativeGetTransform={id => engine.getSourceTransform(id)} nativeSetTransform={(id, patch) => engine.setSourceTransform(id, patch)} nativeAdd={async () => { setShowInputPicker(true); }} nativeRemove={id => engine.remove(id)} nativeRename={(id, name) => engine.renameSource(id, name)} nativeRecord={toggleRecording} nativeRecording={recording} nativeOpenTransmissionSettings={() => setTransmissionSettingsOpen(true)} nativePerformance={performanceMetrics} advancedOpen={showAdvancedControls} onToggleAdvanced={() => setShowAdvancedControls(value => !value)} />
     <input ref={videoFile} type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" className="hidden" aria-label="Selecionar arquivo de vídeo" onChange={e => void addVideoFile(e.target.files?.[0])} />
     <input ref={imageFile} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" className="hidden" aria-label="Selecionar imagem para input" onChange={e => void addImage(e.target.files?.[0])} />
@@ -448,7 +446,8 @@ export default function App() {
         </div>
       </section>
     </div>}
-    {showAdvancedControls && <aside id="wmix-advanced-controls" aria-label="Controles avançados do motor wMix" className="fixed bottom-14 right-3 top-14 z-[120] w-[min(410px,calc(100vw-24px))] overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-2xl"><h2 className="mb-3 text-sm font-semibold text-foreground">Controles avançados</h2>
+    <aside hidden={!showAdvancedControls} id="wmix-advanced-controls" aria-label="Controles avançados do motor wMix" className="fixed bottom-14 right-3 top-14 z-[120] w-[min(410px,calc(100vw-24px))] overflow-y-auto rounded-xl border border-border bg-card p-3 shadow-2xl"><h2 className="mb-3 text-sm font-semibold text-foreground">Motor e conexões</h2>
+      <div className="mb-4 space-y-3"><NativeEnginePanel /><ObsConnectionPanel /></div>
       <button type="button" onClick={() => setTransmissionSettingsOpen(true)} className="mb-3 w-full rounded-lg border border-primary/40 bg-primary/10 px-3 py-3 text-left text-xs font-semibold text-foreground hover:bg-primary/20">Configurações → Transmissão RTMP/RTMPS</button>
       <section aria-label="Configuração do motor de vídeo" className="mb-3 space-y-2 rounded-lg border border-border p-2 text-xs text-foreground">
         <h3 className="font-semibold">Motor de vídeo · Saída</h3>
@@ -498,7 +497,7 @@ export default function App() {
         <button type="button" onClick={() => void refreshMicrophones()} title="Atualizar dispositivos" aria-label="Atualizar dispositivos de áudio" className="px-1 text-xs text-foreground">↻</button>
         <button onClick={() => void addMicrophone()} className="rounded bg-secondary px-2 py-2 text-xs font-semibold text-foreground">+ Microfone</button>
       </div>
-    </div></aside>}
+    </div></aside>
     {error && <div role="alert" className="fixed bottom-24 right-3 z-[120] max-w-sm rounded bg-red-950 p-3 text-xs text-white">{error}</div>}
     <div className="hidden" role="status" aria-live="polite">{sources.length ? `wMix Engine • ${sources.length} fonte(s) real(is) • Gravação WebM com áudio quando microfone conectado` : "Interface Lovable • Adicione imagem, câmera ou tela para ativar o motor próprio • Sem OBS"}</div>
   </>;

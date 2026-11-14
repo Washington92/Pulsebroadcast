@@ -189,6 +189,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const [elapsed, setElapsed] = useState(0);
   const [clock, setClock] = useState("--:--:--");
   const [bus, setBus] = useState({ master: 78, fone: 60, a: 70, b: 70, masterMute: false });
+  const [showVertical, setShowVertical] = useState(true);
   const [vMode, setVMode] = useState<"safe" | "center" | "track">("center");
   const [zoom, setZoom] = useState(6);
   const [tab, setTab] = useState("Preparar");
@@ -350,7 +351,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
       </header>
 
       {/* ===== Upper deck ===== */}
-      <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px clamp(216px, 17vw, 260px) minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
+      <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px clamp(216px, 17vw, 260px) minmax(0,${100 - panelLayout.preview}fr)${showVertical ? " 130px" : ""}` }}>
         {/* Preview */}
         <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-xs">
@@ -481,6 +482,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         </div>
 
         {/* Vertical */}
+        {showVertical && (
         <div className="flex min-h-0 flex-col overflow-y-auto rounded-md border border-border bg-card p-2">
           <div className="text-[10px] font-bold tracking-wider">VERTICAL</div>
           <div className="relative mx-auto mt-1 aspect-[9/16] w-full overflow-hidden rounded-sm bg-background">
@@ -502,6 +504,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
             ))}
           </div>
         </div>
+        )}
       </section>
 
       <div role="separator" aria-label="Redimensionar altura dos monitores" aria-orientation="horizontal" title="Arraste para ajustar a altura dos monitores" onPointerDown={e => dragLayout(e, "upper")} className="h-1.5 shrink-0 cursor-row-resize rounded bg-border/50 hover:bg-slate-500" />
@@ -691,7 +694,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         </div>
         <div role="group" aria-label="Controles de saída" className="flex items-center gap-1 border-l border-border pl-2">
           <button className={cn(btn, "h-7 px-3")}><ExternalLink className="h-3.5 w-3.5" />Saídas<ChevronDown className="h-3 w-3" /></button>
-          <button className={cn(btn, "h-7 px-3")}><MonitorPlay className="h-3.5 w-3.5" />Monitores<ChevronDown className="h-3 w-3" /></button>
+          <button type="button" aria-pressed={showVertical} onClick={() => setShowVertical(value => !value)} className={cn(btn, "h-7 px-3", showVertical && "text-primary")}><MonitorPlay className="h-3.5 w-3.5" />Monitor vertical</button>
           <button className={cn(btn, "h-7 px-3")}>Checar saída</button>
         </div>
         <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 62, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
