@@ -29,11 +29,6 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run build
-      - name: Rust unit tests and type checking
-        working-directory: src-tauri
-        run: |
-          cargo test
-          cargo check
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -57,6 +52,11 @@ jobs:
           Copy-Item $binary.FullName src-tauri/resources/ffmpeg.exe
           & src-tauri/resources/ffmpeg.exe -version
           if ($LASTEXITCODE -ne 0) { throw "Bundled FFmpeg failed to execute" }
+      - name: Rust unit tests and type checking
+        working-directory: src-tauri
+        run: |
+          cargo test
+          cargo check
       - run: npm run tauri build
       - name: Verify FFmpeg included in installer payload
         shell: pwsh
