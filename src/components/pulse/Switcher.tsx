@@ -444,7 +444,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
 
         <div role="separator" aria-label="Redimensionar Preview e Program" aria-orientation="vertical" title="Arraste para ajustar Preview e Program" onPointerDown={e => dragLayout(e, "preview")} className="cursor-col-resize rounded bg-border/50 hover:bg-slate-500 active:bg-slate-400" />
         {/* Center console — live switching desk */}
-        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-3">
+        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto overscroll-contain wmix-scrollbar rounded-lg border border-border bg-card p-3">
           <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
             <div className="min-w-0"><div className="font-mono text-base font-bold tabular-nums tracking-wide">{clock}</div><div className="font-mono text-[10px] text-muted-foreground">{fmtElapsed(elapsed)}</div></div>
             <span className={cn("shrink-0 rounded border px-2 py-1 text-[10px] font-semibold", recording || streaming ? "border-primary text-primary" : "border-border text-muted-foreground")}>{recording ? "● REC" : streaming ? "● LIVE" : "EM ESPERA"}</span>
@@ -559,7 +559,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
               <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Grade"><LayoutGrid className="h-3 w-3" /></button>
               <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Destacar"><ExternalLink className="h-3 w-3" /></button>
             </div>
-            <div className="grid min-h-0 flex-1 auto-rows-min gap-2 overflow-y-auto px-2 pb-2"
+            <div className="grid min-h-0 flex-1 auto-rows-min gap-2 overflow-y-auto wmix-scrollbar px-2 pb-2"
               style={{ gridTemplateColumns: `repeat(${zoom}, minmax(0, 1fr))` }}>
               {sources.map((s) => {
                 const isPgm = s.id === currentProgramId, isPvw = s.id === currentPreviewId;
@@ -567,7 +567,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                   <div key={s.id}
                     className={cn("rounded-md border bg-card p-1 transition-shadow",
                       isPgm ? "glow-pgm border-transparent" : isPvw ? "glow-pvw border-transparent" : "border-border")}>
-                    <button className="relative block aspect-video w-full overflow-hidden rounded-sm bg-background"
+                    <button className="relative block aspect-video max-h-28 w-full overflow-hidden rounded-sm bg-background"
                       onClick={() => { setPreviewId(s.id); if (obsConnected && obsPrepare) void obsPrepare(s.name).catch(e => setObsError(String(e))); }} onDoubleClick={() => { if (nativeSources.length && nativeCut) { nativeCut(nativeSources[s.id - 1].id); } else if (!obsConnected) { setPreviewId(s.id); setTimeout(cut, 0); } else if (obsTake && !obsBusy) { setObsBusy(true); void obsTake(s.name, "cut", 0).catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } }}
                       title="Clique: preview · Duplo clique: corte">
                       {renderFrame(s)}
