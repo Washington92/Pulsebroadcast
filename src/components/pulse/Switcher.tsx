@@ -391,15 +391,15 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 62, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
       </div>
       {/* ===== Upper deck ===== */}
-      <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px 224px minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
+      <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px clamp(216px, 17vw, 260px) minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
         {/* Preview */}
         <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
-          <div className="flex h-7 items-center gap-2 px-2 text-xs">
+          <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-xs">
             <span className="rounded bg-tally-pvw px-2 py-0.5 text-[10px] font-bold text-primary-foreground">PREVIEW</span>
-            <span className="font-mono text-muted-foreground">{previewId}</span><span className="min-w-0 flex-1 truncate font-medium">{pvw?.name}</span>
+            <span className="font-mono text-muted-foreground">{currentPreviewId || "—"}</span><span className="min-w-0 flex-1 truncate font-medium">{pvw?.name ?? "Sem fonte"}</span>
             {nativeGetTransform && nativeSetTransform && <button type="button" aria-pressed={editPreview} onClick={() => setEditPreview(v => !v)} className={cn(btn, "h-6 shrink-0 px-2 text-[10px]", editPreview && "border-red-500 text-red-400")}><Pencil className="h-3 w-3" />{editPreview ? "Concluir" : "Transformar"}</button>}
           </div>
-          <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
+          <div className="relative mx-2 min-h-0 flex-1 overflow-hidden rounded bg-background">
             {renderFrame(pvw)}
             {editPreview && nativeGetTransform && nativeSetTransform && (() => {
               const selected = nativeSources[currentPreviewId - 1];
@@ -444,12 +444,12 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
 
         <div role="separator" aria-label="Redimensionar Preview e Program" aria-orientation="vertical" title="Arraste para ajustar Preview e Program" onPointerDown={e => dragLayout(e, "preview")} className="cursor-col-resize rounded bg-border/50 hover:bg-slate-500 active:bg-slate-400" />
         {/* Center console — live switching desk */}
-        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-2">
+        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-3">
           <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
             <div className="min-w-0"><div className="font-mono text-base font-bold tabular-nums tracking-wide">{clock}</div><div className="font-mono text-[10px] text-muted-foreground">{fmtElapsed(elapsed)}</div></div>
             <span className={cn("shrink-0 rounded border px-2 py-1 text-[10px] font-semibold", recording || streaming ? "border-primary text-primary" : "border-border text-muted-foreground")}>{recording ? "● REC" : streaming ? "● LIVE" : "EM ESPERA"}</span>
           </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_38px] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2">
             <div className="flex min-w-0 flex-col gap-2">
               <button onClick={auto} className="flex min-h-12 flex-col justify-center rounded-md bg-primary px-3 py-2 text-left text-primary-foreground hover:brightness-110">
                 <div className="flex items-center justify-between gap-2"><span className="text-base font-bold">AUTO</span><span className="text-[10px] opacity-80">Enter</span></div>
@@ -461,15 +461,15 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
               <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Tipo de transição">
                 {(Object.keys(durations) as TransitionType[]).map((t) => (
                   <div key={t} className={cn("flex min-w-0 items-center rounded-md border", transition === t ? "border-primary bg-primary/10" : "border-border bg-secondary")}>
-                    <button type="button" onClick={() => setTransition(t)} aria-pressed={transition === t} className={cn("min-w-0 flex-1 truncate px-1.5 py-2 text-left text-[11px] font-medium", transition === t && "text-primary")}>{t}</button>
-                    <input type="number" step={0.1} min={0.1} max={5} value={durations[t]} aria-label={`Duração de ${t} em segundos`} onChange={e => setDurations(d => ({...d, [t]: Math.max(0.1, Math.min(5, Number(e.target.value) || 0.1))}))} className="w-9 shrink-0 border-l border-border bg-transparent py-2 pr-1 text-right font-mono text-[10px] text-muted-foreground outline-none" />
+                    <button type="button" onClick={() => setTransition(t)} aria-pressed={transition === t} className={cn("min-w-0 flex-1 px-1 py-2 text-left text-[10px] font-semibold", transition === t && "text-primary")}>{t}</button>
+                    <input type="number" step={0.1} min={0.1} max={5} value={durations[t]} aria-label={`Duração de ${t} em segundos`} onChange={e => setDurations(d => ({...d, [t]: Math.max(0.1, Math.min(5, Number(e.target.value) || 0.1))}))} className="w-7 shrink-0 appearance-none border-l border-border bg-transparent py-2 pr-1 text-right font-mono text-[10px] text-muted-foreground focus-visible:outline-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
                   </div>
                 ))}
               </div>
             </div>
             <div className="flex min-w-0 flex-col items-center rounded-md border border-border/60 bg-background/40 px-1 py-2">
               <span className="text-[9px] font-bold tracking-wide text-muted-foreground">T-BAR</span>
-              <div className="relative mt-2 h-36 w-5 rounded-md border border-border bg-background shadow-inner">
+              <div className="relative mt-2 min-h-24 w-5 flex-1 rounded-md border border-border bg-background shadow-inner focus-within:ring-2 focus-within:ring-primary">
                 <div className="absolute inset-x-1/2 inset-y-1 w-px bg-border" />
                 <input type="range" min={0} max={1} step={0.01} value={progress} aria-label="T-Bar" onChange={e => onTbar(+e.target.value)} className="vfader absolute inset-0 h-full w-full cursor-grab opacity-0" />
                 <div className="pointer-events-none absolute -left-1.5 h-4 w-8 rounded border border-slate-400 bg-gradient-to-b from-slate-100 to-slate-500 shadow-md" style={{ top: `calc(${progress * 100}% * 0.85)` }} />
@@ -498,12 +498,12 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         </div>
         {/* Program */}
         <div className="glow-pgm flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
-          <div className="flex h-7 items-center gap-2 px-2 text-xs">
+          <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-xs">
             <span className="rounded bg-tally-pgm px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">PROGRAMA</span>
-            <span className="font-mono text-muted-foreground">{currentProgramId || "—"}</span><span className="font-medium">{pgm?.name}</span>
+            <span className="font-mono text-muted-foreground">{currentProgramId || "—"}</span><span className="min-w-0 truncate font-medium">{pgm?.name ?? "Sem fonte"}</span>
             {streaming && <span className="ml-auto animate-pulse text-[10px] font-bold text-tally-pgm">● NO AR</span>}
           </div>
-          <div className="relative mx-2 aspect-video overflow-hidden rounded-sm bg-background">
+          <div className="relative mx-2 min-h-0 flex-1 overflow-hidden rounded bg-background">
             {renderProgram("absolute inset-0")}
             {progress > 0 && <div className="absolute inset-0" style={incoming}><Frame s={pvw} /></div>}
             <LowerThird show={titleOnAir} />
