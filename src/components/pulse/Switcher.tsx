@@ -2,8 +2,8 @@ import type { AudioInput } from "../../engine/WmixAudioEngine";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity, ChevronDown, Copy, ExternalLink, FolderOpen, Headphones, Layers, LayoutGrid,
-  Mic, MicOff, MonitorPlay, Pause, Play, Plus, Radio, RotateCcw, Settings, SlidersHorizontal,
-  Sparkles, User, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut, Repeat, Hand, Crosshair, Square, ScanLine, Lock, Unlock, Pencil,
+  Mic, MicOff, MonitorPlay, Plus, Radio, Settings, SlidersHorizontal,
+  Sparkles, User, Volume2, VolumeX, Wifi, ZoomIn, ZoomOut, Hand, Crosshair, Square, ScanLine, Lock, Unlock, Pencil,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { initialSources, type Source, type TransitionType } from "./data";
@@ -58,43 +58,6 @@ function LowerThird({ show }: { show: boolean }) {
       <div className="text-lg font-semibold text-foreground">Show de lançamento</div>
     </div>
   );
-}
-
-function Transport({ pos, setPos, playing, setPlaying, remaining, extra }: {
-  pos: number; setPos: (n: number) => void; playing: boolean; setPlaying: (b: boolean) => void; remaining: string; extra?: React.ReactNode;
-}) {
-  const fmt = (n: number) => `0:${String(Math.floor(n)).padStart(2, "0")}`;
-  return (
-    <div className="flex h-9 items-center gap-1 px-2">
-      <button className={cn(btn, "h-6 w-6 px-0")} onClick={() => setPos(0)} aria-label="Reiniciar"><RotateCcw className="h-3 w-3" /></button>
-      {[-10, -5].map((d) => (
-        <button key={d} className={cn(btn, "h-6 px-1.5 font-mono")} onClick={() => setPos(Math.max(0, pos + d))}>{d}</button>
-      ))}
-      <button className={cn(btn, "h-6 w-6 px-0")} onClick={() => setPlaying(!playing)} aria-label={playing ? "Pausar" : "Tocar"}>
-        {playing ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-      </button>
-      {[5, 10].map((d) => (
-        <button key={d} className={cn(btn, "h-6 px-1.5 font-mono")} onClick={() => setPos(Math.min(60, pos + d))}>+{d}</button>
-      ))}
-      <span className="ml-2 font-mono text-[11px] text-muted-foreground">{fmt(pos)}</span>
-      <input type="range" min={0} max={60} step={0.1} value={pos} onChange={(e) => setPos(+e.target.value)}
-        className="mx-1 h-1 min-w-0 flex-1 accent-primary" aria-label="Posição" />
-      <span className="font-mono text-[11px] font-bold">{remaining}</span>
-      <button className={cn(btn, "ml-1 h-6 w-6 border-primary/60 px-0 text-primary")} aria-label="Loop"><Repeat className="h-3 w-3" /></button>
-      {extra}
-    </div>
-  );
-}
-
-function usePlayhead(start: number) {
-  const [pos, setPos] = useState(start);
-  const [playing, setPlaying] = useState(true);
-  useEffect(() => {
-    if (!playing) return;
-    const t = setInterval(() => setPos((p) => (p >= 60 ? 0 : p + 0.25)), 250);
-    return () => clearInterval(t);
-  }, [playing]);
-  return { pos, setPos, playing, setPlaying };
 }
 
 /* ---------- Audio ---------- */
@@ -240,8 +203,6 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const pgm = sources.find((s) => s.id === currentProgramId);
   const pvw = sources.find((s) => s.id === currentPreviewId);
   const levels = useMeters(sources);
-  const pvwHead = usePlayhead(11);
-  const pgmHead = usePlayhead(24);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -437,8 +398,6 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
               </div>;
             })()}
           </div>
-          <Transport {...pvwHead} remaining={pvw?.remaining || "--"}
-            extra={<>{["IN", "OUT", "CUE"].map((x) => <button key={x} className={cn(btn, "h-6 px-1.5 text-[10px] font-semibold")}>{x}</button>)}</>} />
         </div>
 
         <div role="separator" aria-label="Redimensionar Preview e Program" aria-orientation="vertical" title="Arraste para ajustar Preview e Program" onPointerDown={e => dragLayout(e, "preview")} className="cursor-col-resize rounded bg-border/50 hover:bg-slate-500 active:bg-slate-400" />
@@ -519,7 +478,6 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
             <LowerThird show={titleOnAir} />
             <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
           </div>
-          <Transport {...pgmHead} remaining={pgm?.remaining || "--"} />
         </div>
 
         {/* Vertical */}
@@ -528,7 +486,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
           <div className="relative mx-auto mt-1 aspect-[9/16] w-full overflow-hidden rounded-sm bg-background">
             {pgm?.img ? (
               <img src={pgm.img} alt="" className="h-full w-full object-cover" draggable={false}
-                style={{ filter: pgm.filter, objectPosition: vMode === "track" ? `${30 + (pgmHead.pos % 40)}% 50%` : vMode === "safe" ? "20% 50%" : "50% 50%" }} />
+                style={{ filter: pgm.filter, objectPosition: vMode === "safe" ? "20% 50%" : "50% 50%" }} />
             ) : renderProgram("h-full")}
             {vMode === "safe" && <div className="absolute inset-[8%_6%_14%] rounded border border-dashed border-primary/70" />}
             <div className={cn("pointer-events-none absolute inset-0 bg-background transition-opacity duration-700", ftb ? "opacity-100" : "opacity-0")} />
