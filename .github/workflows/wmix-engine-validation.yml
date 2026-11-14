@@ -48,6 +48,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate official wMix Windows icon
+        working-directory: .
+        run: |
+          python -m pip install pillow
+          python scripts/generate_wmix_icon.py
+      - name: Install and bundle FFmpeg executable
+        shell: pwsh
+        working-directory: .
+        run: |
+          choco install ffmpeg -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "FFmpeg installation failed" }
+          $binary = Get-ChildItem 'C:\ProgramData\chocolatey\lib\ffmpeg' -Filter ffmpeg.exe -Recurse -File | Where-Object { $_.DirectoryName -like '*bin' } | Select-Object -First 1
+          if (-not $binary) { throw "Real FFmpeg executable not found; refusing to package PATH shim" }
+          New-Item -ItemType Directory -Force -Path src-tauri/resources | Out-Null
+          Copy-Item $binary.FullName src-tauri/resources/ffmpeg.exe
+          & src-tauri/resources/ffmpeg.exe -version
+          if ($LASTEXITCODE -ne 0) { throw "Bundled FFmpeg failed to execute" }
       - run: cargo test --locked
         if: ${{ hashFiles('src-tauri/Cargo.lock') != '' }}
       - run: cargo test
