@@ -365,31 +365,28 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
             {streaming ? "AO VIVO" : "PRONTO"}
           </span>
         </div>
-        <button className={cn(btn, "h-8 w-24 justify-between")}>
-          <span className="flex items-center gap-1.5"><FolderOpen className="h-3.5 w-3.5" />Show de lançamento</span>
+        <button className={cn(btn, "h-8 shrink-0 justify-between px-2")}>
+          <span className="flex items-center gap-1.5 whitespace-nowrap"><FolderOpen className="h-3.5 w-3.5" />Show de lançamento</span>
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
-        <nav className="flex gap-1">
+        <nav aria-label="Áreas de trabalho" className="flex min-w-0 gap-0.5 overflow-x-auto rounded-lg border border-border bg-panel p-0.5">
           {tabs.map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              className={cn(btn, "h-8 px-2.5 text-[11px]", tab === t && "border-slate-500/60 bg-accent text-foreground")}>{t}</button>
+              aria-pressed={tab === t} className={cn("h-7 shrink-0 rounded-md px-2.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground", tab === t && "bg-accent text-foreground")}>{t}</button>
           ))}
         </nav>
         <button onClick={() => setManual(!manual)}
-          className={cn(btn, "h-8 w-32", manual ? "border-warn text-warn" : "text-muted-foreground")}>
+          className={cn(btn, "h-8 shrink-0 px-2", manual ? "border-warn text-warn" : "text-muted-foreground")}>
           <Hand className="h-3.5 w-3.5" />{manual ? "Manual ativo" : "Assumir manual"}
         </button>
         <div className="ml-auto flex items-center gap-2">
           <button className={cn(btn, "h-8 border-border/70 bg-secondary/60 px-3 text-muted-foreground")}><Sparkles className="h-3.5 w-3.5" />Copilot</button>
           <button className={cn(btn, "h-8 w-8 px-0")} aria-label="Configurações"><Settings className="h-4 w-4" /></button>
           <button type="button" onClick={onToggleAdvanced} aria-expanded={advancedOpen} aria-label="Controles avançados" title="Controles avançados" className={cn(btn, "h-8 gap-1 px-2", advancedOpen && "border-primary text-primary")}><SlidersHorizontal className="h-3.5 w-3.5" /><span className="hidden xl:inline">Avançado</span></button>
-          <button className={cn(btn, "h-8 w-44 justify-between")}><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Conta</span><ChevronDown className="h-3.5 w-3.5" /></button>
+          <button className={cn(btn, "h-8 shrink-0 justify-between px-2")}><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Conta</span><ChevronDown className="h-3.5 w-3.5" /></button>
         </div>
       </header>
 
-      <div className="flex shrink-0 justify-end">
-        <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 62, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
-      </div>
       {/* ===== Upper deck ===== */}
       <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px clamp(216px, 17vw, 260px) minmax(0,${100 - panelLayout.preview}fr) 130px` }}>
         {/* Preview */}
@@ -551,9 +548,11 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
       <section ref={lowerDeckRef} className="grid min-h-0 flex-1 gap-1" style={{gridTemplateColumns: view === "Ambos" ? `minmax(0,${panelLayout.inputs}fr) 6px minmax(0,${100-panelLayout.inputs}fr)` : "minmax(0,1fr)"}}>
         {view !== "Mixer" && (
           <div className="flex min-h-0 flex-col rounded-md border border-border bg-panel">
-            <div className="flex items-center gap-1 p-2">
-              <span className="text-[10px] font-bold tracking-wider text-muted-foreground">INPUTS</span>
+            <div className="mb-2 flex items-center gap-2 border-b border-border px-3 py-2">
+              <span className="text-xs font-semibold">Fontes</span>
+              <span className="font-mono text-xs text-muted-foreground">{sources.length}</span>
               <span className="ml-auto" />
+              <button onClick={() => { if (nativeAdd) { try { void Promise.resolve(nativeAdd()).catch(e => setObsError(String(e))); } catch (e) { setObsError(String(e)); } } else addInput(); }} className={cn(btn, "h-8 border-primary/50 px-3 text-primary")}><Plus className="h-3.5 w-3.5" />Adicionar fonte</button>
               <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Diminuir" onClick={() => setZoom((z) => Math.min(8, z + 1))}><ZoomOut className="h-3 w-3" /></button>
               <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Aumentar" onClick={() => setZoom((z) => Math.max(3, z - 1))}><ZoomIn className="h-3 w-3" /></button>
               <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Grade"><LayoutGrid className="h-3 w-3" /></button>
@@ -701,26 +700,30 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
       </section>
 
       {/* ===== Bottom bar ===== */}
-      <footer className="flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-card px-2">
-        <button onClick={() => { if (nativeAdd) { try { void Promise.resolve(nativeAdd()).catch(e => setObsError(String(e))); } catch (e) { setObsError(String(e)); } } else addInput(); }} className={cn(btn, "h-7 px-4")}><Plus className="h-3.5 w-3.5" />Adicionar input</button>
-        <div className="flex">
-          <button onClick={() => { if (nativeRecord) { void nativeRecord().catch(e => setObsError(String(e))); } else if (obsConnected) { if (!obsToggleRecording || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleRecording().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoRecording(!demoRecording); }}
-            className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", recording && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
-            <span className={cn("h-2 w-2 rounded-full bg-tally-pgm", recording && "animate-pulse bg-destructive-foreground")} />
-            {recording ? `Gravando ${fmtElapsed(elapsed)}` : "Gravar"}
-          </button>
-          <button className={cn(btn, "h-7 rounded-l-none border-l-0 px-3")}>H <ChevronDown className="h-3 w-3" /></button>
+      <footer className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border bg-card px-3 py-1.5">
+        <div role="group" aria-label="Gravação e transmissão" className="flex items-center gap-2">
+          <div className="flex">
+            <button onClick={() => { if (nativeRecord) { void nativeRecord().catch(e => setObsError(String(e))); } else if (obsConnected) { if (!obsToggleRecording || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleRecording().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoRecording(!demoRecording); }}
+              className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", recording && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
+              <span className={cn("h-2 w-2 rounded-full bg-tally-pgm", recording && "animate-pulse bg-destructive-foreground")} />
+              {recording ? `Gravando ${fmtElapsed(elapsed)}` : "Gravar"}
+            </button>
+            <button className={cn(btn, "h-7 rounded-l-none border-l-0 px-3")}>H <ChevronDown className="h-3 w-3" /></button>
+          </div>
+          <div className="flex">
+            <button onClick={() => { if (nativeAdd) { setObsError(""); nativeOpenTransmissionSettings?.(); } else if (obsConnected) { if (!obsToggleStreaming || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleStreaming().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoStreaming(!demoStreaming); }}
+              className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", streaming && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
+              <Radio className="h-3.5 w-3.5" />{streaming ? "Encerrar" : "Transmitir"}
+            </button>
+            <button className={cn(btn, "h-7 rounded-l-none border-l-0 px-3")}>H+V <ChevronDown className="h-3 w-3" /></button>
+          </div>
         </div>
-        <div className="flex">
-          <button onClick={() => { if (nativeAdd) { setObsError(""); nativeOpenTransmissionSettings?.(); } else if (obsConnected) { if (!obsToggleStreaming || obsBusy) return; setObsBusy(true); setObsError(""); void obsToggleStreaming().catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } else setDemoStreaming(!demoStreaming); }}
-            className={cn(btn, "h-7 rounded-r-none px-5 font-semibold", streaming && "border-tally-pgm bg-tally-pgm text-destructive-foreground")}>
-            <Radio className="h-3.5 w-3.5" />{streaming ? "Encerrar" : "Transmitir"}
-          </button>
-          <button className={cn(btn, "h-7 rounded-l-none border-l-0 px-3")}>H+V <ChevronDown className="h-3 w-3" /></button>
+        <div role="group" aria-label="Controles de saída" className="flex items-center gap-1 border-l border-border pl-2">
+          <button className={cn(btn, "h-7 px-3")}><ExternalLink className="h-3.5 w-3.5" />Saídas<ChevronDown className="h-3 w-3" /></button>
+          <button className={cn(btn, "h-7 px-3")}><MonitorPlay className="h-3.5 w-3.5" />Monitores<ChevronDown className="h-3 w-3" /></button>
+          <button className={cn(btn, "h-7 px-3")}>Checar saída</button>
         </div>
-        <button className={cn(btn, "h-7 px-3")}><ExternalLink className="h-3.5 w-3.5" />Saídas<ChevronDown className="h-3 w-3" /></button>
-        <button className={cn(btn, "h-7 px-3")}><MonitorPlay className="h-3.5 w-3.5" />Monitores<ChevronDown className="h-3 w-3" /></button>
-        <button className={cn(btn, "h-7 px-3")}>Checar saída</button>
+        <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 62, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
         <div className="ml-auto flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
           <span className="rounded border border-border px-3 py-1" role="status" aria-label="Desempenho de renderização"><Activity className="mr-1 inline h-3 w-3 text-primary" />{nativePerformance ? `FPS ${nativePerformance.fps} · Frames perdidos ${nativePerformance.droppedFrames}` : "Desempenho indisponível"}</span>
           <span className="flex items-center gap-1"><Wifi className={cn("h-3 w-3", streaming ? "text-tally-pvw" : "")} />RTMP {streaming ? "transmitindo via OBS" : "ocioso"}</span>
