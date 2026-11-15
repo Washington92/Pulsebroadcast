@@ -173,7 +173,18 @@ export default function App() {
   const [inputSearch, setInputSearch] = useState("");
   const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
-    engine.onSourcesChanged = () => { setSources(engine.list()); setOverlay(engine.currentOverlay() ?? ""); };
+    engine.onSourcesChanged = () => {
+      const current = engine.list();
+      setSources(current);
+      setOverlay(engine.currentOverlay() ?? "");
+      const active = new Set(current.map(source => source.id));
+      for (const [id, client] of lanCameras.current) {
+        if (!active.has(id)) {
+          client.disconnect();
+          lanCameras.current.delete(id);
+        }
+      }
+    };
     void refreshMicrophones();
     const refreshDevices = () => { void refreshMicrophones(); };
     navigator.mediaDevices?.addEventListener?.("devicechange", refreshDevices);
