@@ -28,8 +28,10 @@ jobs:
         shell: bash
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME}"
-          command -v sdkmanager
-          sdkmanager --version
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          "$SDKMANAGER" --version
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
