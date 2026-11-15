@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-type RuntimeStatus = { initialized: boolean; version: string | null; message: string };
+type RuntimeStatus = { initialized: boolean; video_ready?: boolean; version: string | null; message: string };
 type TauriBridge = { core?: { invoke?: (command: string, args?: Record<string, unknown>) => Promise<RuntimeStatus> } };
 const bridge = () => (window as Window & { __TAURI__?: TauriBridge }).__TAURI__?.core?.invoke;
 
@@ -28,7 +28,7 @@ export function NativeEnginePanel() {
   return <section className="rounded-lg border border-border bg-card p-2 text-xs text-foreground shadow-lg" aria-label="Motor nativo libobs">
     <div className="mb-1 flex items-center gap-2">
       <strong>Motor libobs</strong>
-      <span role="status">{!invoke ? "Somente no desktop Tauri" : status?.initialized ? "Inicializado (sem vídeo)" : "Desligado"}</span>
+      <span role="status">{!invoke ? "Somente no desktop Tauri" : status?.video_ready ? "Vídeo configurado" : status?.initialized ? "Inicializado (sem vídeo)" : "Desligado"}</span>
     </div>
     {invoke && <>
       <label className="flex items-center gap-2">DLL
