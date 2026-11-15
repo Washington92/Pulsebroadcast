@@ -545,7 +545,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                       onClick={() => { setPreviewId(s.id); if (obsConnected && obsPrepare) void obsPrepare(s.name).catch(e => setObsError(String(e))); }} onDoubleClick={() => { if (nativeSources.length && nativeCut) { nativeCut(nativeSources[s.id - 1].id); } else if (!obsConnected) { setPreviewId(s.id); setTimeout(cut, 0); } else if (obsTake && !obsBusy) { setObsBusy(true); void obsTake(s.name, "cut", 0).catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } }}
                       title="Clique: preview · Duplo clique: corte">
                       {renderFrame(s)}
-                      {(isPvw || isPgm) && <span className="absolute left-1 top-1 flex gap-1 text-[9px] font-bold leading-none">
+                      {(isPvw || isPgm) && <span className="absolute inset-x-1 top-1 flex flex-wrap gap-1 text-[9px] font-bold leading-none">
                         {isPvw && <span className="rounded bg-tally-pvw px-1.5 py-1 text-primary-foreground">Preview</span>}
                         {isPgm && <span className="rounded bg-tally-pgm px-1.5 py-1 text-destructive-foreground">Programa</span>}
                       </span>}
@@ -556,7 +556,9 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                       <span className={cn("grid h-4 min-w-4 place-items-center rounded-sm px-0.5 font-mono font-bold",
                         isPgm ? "bg-tally-pgm text-destructive-foreground" : isPvw ? "bg-tally-pvw text-primary-foreground" : "text-muted-foreground")}>{s.id}</span>
                       <span className="min-w-0 flex-1 truncate font-medium" title={`${s.name} · ${s.type}`}>{s.name}</span>
-                      <span className="shrink-0 text-[8px] text-muted-foreground">{s.type}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className="mr-auto text-[9px] text-muted-foreground">{s.type}</span>
                       {nativeRename && nativeSources[s.id - 1] && <button type="button" aria-label={`Renomear input ${s.name}`} title="Renomear input" className={cn(btn, "h-5 px-1")} onClick={() => { const source = nativeSources[s.id - 1]; if (!source) return; const name = window.prompt("Novo nome do input:", source.name); if (name === null) return; if (!name.trim()) { setObsError("Informe um nome válido para o input."); return; } nativeRename(source.id, name); }}><Pencil className="h-3 w-3" /></button>}
                       {nativeRemove && nativeSources[s.id - 1] && <button type="button" aria-label={`${lockedInputs.includes(nativeSources[s.id - 1].id) ? "Desbloquear" : "Bloquear"} input ${s.name}`} title={lockedInputs.includes(nativeSources[s.id - 1].id) ? "Desbloquear exclusão" : "Proteger contra exclusão"} aria-pressed={lockedInputs.includes(nativeSources[s.id - 1].id)} className={cn(btn, "h-5 px-1", lockedInputs.includes(nativeSources[s.id - 1].id) && "border-primary text-primary")} onClick={() => { const id = nativeSources[s.id - 1]?.id; if (id) setLockedInputs(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]); }}>{lockedInputs.includes(nativeSources[s.id - 1].id) ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}</button>}
                       {nativeRemove && nativeSources[s.id - 1] && <button type="button" aria-label={`Excluir input ${s.name}`} title={lockedInputs.includes(nativeSources[s.id - 1].id) ? "Input protegido: desbloqueie antes de excluir" : `Excluir ${s.name}`} disabled={lockedInputs.includes(nativeSources[s.id - 1].id)} className={cn(btn, "h-5 px-1 text-destructive disabled:cursor-not-allowed disabled:opacity-30")} onClick={() => {
@@ -571,13 +573,13 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                       }}>✕</button>}
 
                     </div>
-                    {source && <div role="group" aria-label={"Ações de " + s.name} className="mt-1 flex gap-1">
+                    {source && <div role="group" aria-label={"Ações de " + s.name} className="mt-1 flex flex-wrap gap-1">
                       {nativeCut && <button type="button" className={cn(btn, "h-6 px-2 font-semibold")}
                         title="Enviar direto ao Programa" onClick={() => nativeCut(source.id)}>CUT</button>}
                       {nativeFade && <button type="button" className={cn(btn, "h-6 px-2 font-semibold text-primary")}
                         title="Enviar ao Programa com transição" onClick={() => nativeFade(source.id, Math.round(durations[transition] * 1000))}>GO</button>}
                     </div>}
-                    <div className="mt-1 flex gap-0.5">
+                    <div className="mt-1 grid grid-cols-[repeat(auto-fit,minmax(1.5rem,1fr))] gap-0.5">
                       {[0, 1, 2, 3].map((i) => (
                         <button key={i} onClick={() => toggleOverlay(i, s.id)}
                           className={cn(btn, "h-5 flex-1 px-0 text-[9px]", overlays[i] === s.id && "border-warn bg-warn text-primary-foreground")}>{i + 1}</button>
