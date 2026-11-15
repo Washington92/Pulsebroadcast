@@ -95,17 +95,27 @@ impl LibobsRuntime {
                 .map_err(|e| format!("obs_get_version_string ausente: {e}"))?;
             (startup, shutdown, version)
         };
+        // Reject incompatible ABIs before calling obs_startup: the video-info layout
+        // and initialization sequence below are validated only for OBS 33.0.1.
+        let version_text = unsafe {
+            let ptr = version();
+            if ptr.is_null() {
+                return Err("libobs retornou versão nula.".into());
+            }
+            CStr::from_ptr(ptr).to_string_lossy().into_owned()
+        };
+        #[cfg(windows)]
+        if !supports_video_abi(&version_text) {
+            return Err(format!(
+                "A integração de vídeo exige libobs 33.0.1; encontrada: {version_text}"
+            ));
+        }
         let locale = CString::new("pt-BR").expect("static locale");
         // SAFETY: signatures match the libobs C ABI; the profiler pointer may be null.
         let started = unsafe { startup(locale.as_ptr(), std::ptr::null(), std::ptr::null_mut()) };
         if !started {
             return Err("obs_startup falhou. Verifique logs e dependências da libobs.".into());
         }
-        let version_text = unsafe {
-            let ptr = version();
-            if ptr.is_null() { "desconhecida".into() }
-            else { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
-        };
         let runtime = LoadedObs { library, shutdown, version: version_text.clone() };
         #[cfg(windows)]
         runtime.initialize_video(&canonical)?;
@@ -139,11 +149,13 @@ impl LibobsRuntime {
 }
 
 #[cfg(windows)]
+fn supports_video_abi(version: &str) -> bool {
+    version == "33.0.1"
+}
+
+#[cfg(windows)]
 impl LoadedObs {
     fn initialize_video(&self, dll: &Path) -> Result<(), String> {
-        if self.version != "33.0.1" {
-            return Err(format!("O vídeo exige libobs 33.0.1. Versão encontrada: {}", self.version));
-        }
         let graphics = dll.with_file_name("libobs-d3d11.dll");
         if !graphics.is_file() {
             return Err(format!("Módulo D3D11 não encontrado: {}", graphics.display()));
@@ -223,6 +235,16 @@ pub fn libobs_status(runtime: tauri::State<'_, LibobsRuntime>) -> Result<LibobsR
 #[cfg(test)]
 mod tests {
     use super::LibobsRuntime;
+    #[cfg(windows)]
+    use super::supports_video_abi;
+    #[cfg(windows)]
+    #[test]
+    fn rejects_unvalidated_video_abi_versions() {
+        assert!(supports_video_abi("33.0.1"));
+        assert!(!supports_video_abi("33.0.0"));
+        assert!(!supports_video_abi("34.0.0"));
+        assert!(!supports_video_abi(""));
+    }
     #[test]
     fn rejects_non_absolute_path() {
         assert!(LibobsRuntime::default().start("obs.dll".into()).is_err());
