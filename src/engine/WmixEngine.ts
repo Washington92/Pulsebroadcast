@@ -246,7 +246,7 @@ export class WmixEngine {
   }
   private addStream(stream: MediaStream, label: string, kind: 'camera' | 'screen' | 'image' | 'video') {
     const id = crypto.randomUUID();
-    const name = stream.getVideoTracks()[0]?.label || label;
+    const name = kind === "image" || kind === "video" ? label : stream.getVideoTracks()[0]?.label || label;
     const video = document.createElement('video');
     video.autoplay = true; video.muted = true; video.playsInline = true; video.srcObject = stream;
     void video.play().catch(() => {});
