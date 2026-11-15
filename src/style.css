@@ -47,3 +47,36 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Broadcast workspace geometry, matching the approved reference at desktop sizes. */
+.wmix-broadcast .wmix-monitors > .glow-pvw,
+.wmix-broadcast .wmix-monitors > .glow-pgm {
+  background: #101713;
+  border-radius: 8px;
+}
+.wmix-broadcast .wmix-monitors > .glow-pvw > :last-child,
+.wmix-broadcast .wmix-monitors > .glow-pgm > :last-child {
+  background-color: #050706;
+}
+.wmix-broadcast .wmix-transition-console {
+  background: #121b16;
+  border-color: #26382d;
+}
+.wmix-broadcast .wmix-inputs-panel,
+.wmix-broadcast .wmix-mixer-panel {
+  background: #111915;
+  border-color: #26352c;
+}
+.wmix-broadcast .wmix-input-grid > div {
+  background: #161f19;
+  border-radius: 7px;
+}
+.wmix-broadcast .wmix-input-grid > div:focus-within {
+  outline: 1px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+.wmix-broadcast .wmix-mixer-panel .vfader { accent-color: #90d321; }
+@media (max-width: 1199px) {
+  .wmix-broadcast .wmix-transition-console { gap: 0.35rem; padding: 0.375rem; }
+  .wmix-broadcast .wmix-input-grid { gap: 0.375rem; }
+}
