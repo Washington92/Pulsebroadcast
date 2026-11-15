@@ -5,6 +5,7 @@ import { ObsConnectionPanel } from "./components/pulse/ObsConnectionPanel";
 import { WmixEngine, type PipLayout, type WmixSource } from "./engine/WmixEngine";
 import { WmixAudioEngine, type AudioInput } from "./engine/WmixAudioEngine";
 import { LocalProgramOutput } from "./engine/LocalProgramOutput";
+import { LanCameraClient } from "./engine/LanCameraClient";
 
 type ScenePreset = { name: string; layout: PipLayout; overlayName: string | null; baseName?: string | null };
 const PRESETS_KEY = "wmix-scene-presets-v1";
@@ -99,6 +100,10 @@ export default function App() {
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState("");
+  const lanCameras = useRef(new Map<string, LanCameraClient>());
+  const [lanDialogOpen, setLanDialogOpen] = useState(false);
+  const [lanId, setLanId] = useState("cam-01");
+  const [lanToken, setLanToken] = useState("");
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
   const [selectedMicrophone, setSelectedMicrophone] = useState("");
   const [sources, setSources] = useState<WmixSource[]>([]);
@@ -175,7 +180,12 @@ export default function App() {
     engine.setPipLayout(pipLayout);
     audio.onChange = setInputs;
     audio.setMaster(0.78, false);
-    engine.onProgramChanged = setProgram;
+    engine.onProgramChanged = id => {
+      setProgram(id);
+      for (const [sourceId, client] of lanCameras.current) {
+        void client.setTally(sourceId === id ? "PROGRAM" : "STANDBY").catch(() => {});
+      }
+    };
     engine.onPerformance = setPerformanceMetrics;
     engine.onRecordingRecovered = blob => {
       const url = URL.createObjectURL(blob);
@@ -272,6 +282,22 @@ export default function App() {
     setSelectedPreset("");
     setError("");
   }
+  function addLanCamera() {
+    setError("");
+    let client: LanCameraClient | null = null;
+    try {
+      client = LanCameraClient.connect("http://127.0.0.1:8787", lanId.trim(), lanToken);
+      const id = engine.addRemoteCamera(client.stream, "wMix Camera " + lanId.trim());
+      lanCameras.current.set(id, client);
+      setLanDialogOpen(false);
+      setLanToken("");
+      void client.setTally("STANDBY").catch(() => {});
+    } catch (error) {
+      client?.disconnect();
+      setError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function addCamera() {
     setError("");
     try {
