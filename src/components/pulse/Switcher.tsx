@@ -313,7 +313,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const tabs = ["Preparar", "Editor", "Teleprompter", "Automações", "Ferramentas"];
 
   return (
-    <div className="flex h-screen min-h-0 min-w-[900px] flex-col gap-1.5 overflow-hidden bg-background p-2 font-sans text-foreground">
+    <div className="wmix-broadcast flex h-screen min-h-0 min-w-[900px] flex-col gap-1.5 overflow-hidden bg-background p-2 font-sans text-foreground">
       {obsError && <div role="alert" className="rounded bg-red-900 px-3 py-1 text-xs text-white">Erro de transmissão: {obsError}</div>}
       {/* ===== Top bar ===== */}
       <header className="wmix-toolbar flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 bg-panel px-3 py-2">
@@ -325,11 +325,11 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
           <span className="text-sm font-black italic tracking-tight">w<span className="text-primary">M</span>ix</span>
           <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-bold",
             streaming ? "bg-tally-pgm text-destructive-foreground" : "border border-primary text-primary")}>
-            {streaming ? "AO VIVO" : "PRONTO"}
+            {streaming ? "AO VIVO" : "BETA"}
           </span>
         </div>
         <button className={cn(btn, "h-9 shrink-0 justify-between px-2")}>
-          <span className="flex items-center gap-1.5 whitespace-nowrap"><FolderOpen className="h-3.5 w-3.5" />Show de lançamento</span>
+          <span className="flex items-center gap-1.5 whitespace-nowrap"><FolderOpen className="h-3.5 w-3.5" />Produção Principal</span>
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
         <nav aria-label="Áreas de trabalho" className="order-last flex min-w-0 basis-full gap-0.5 overflow-x-auto rounded-lg bg-background/70 p-1 2xl:order-none 2xl:basis-auto">
