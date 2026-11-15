@@ -545,6 +545,10 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                       onClick={() => { setPreviewId(s.id); if (obsConnected && obsPrepare) void obsPrepare(s.name).catch(e => setObsError(String(e))); }} onDoubleClick={() => { if (nativeSources.length && nativeCut) { nativeCut(nativeSources[s.id - 1].id); } else if (!obsConnected) { setPreviewId(s.id); setTimeout(cut, 0); } else if (obsTake && !obsBusy) { setObsBusy(true); void obsTake(s.name, "cut", 0).catch(e => setObsError(String(e))).finally(() => setObsBusy(false)); } }}
                       title="Clique: preview · Duplo clique: corte">
                       {renderFrame(s)}
+                      {(isPvw || isPgm) && <span className="absolute left-1 top-1 flex gap-1 text-[9px] font-bold leading-none">
+                        {isPvw && <span className="rounded bg-tally-pvw px-1.5 py-1 text-primary-foreground">Preview</span>}
+                        {isPgm && <span className="rounded bg-tally-pgm px-1.5 py-1 text-destructive-foreground">Programa</span>}
+                      </span>}
                       {s.remaining && <span className="absolute bottom-0.5 right-1 rounded bg-background/80 px-1 font-mono text-[9px] font-bold">{s.remaining}</span>}
                       <div className="absolute bottom-0 left-0 h-0.5 bg-primary" style={{ width: `${(levels[s.id] ?? 0) * 100}%` }} />
                     </button>
