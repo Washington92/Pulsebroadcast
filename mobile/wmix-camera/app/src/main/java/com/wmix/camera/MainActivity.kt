@@ -97,31 +97,28 @@ class MainActivity : ComponentActivity() {
         else ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 100)
     }
 
+    private fun unavailable(feature: String) {
+        Toast.makeText(this, "$feature: recurso ainda não implementado", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun infoPopup(anchor: View, title: String, options: List<String>) {
+        val popup = PopupMenu(this, anchor)
+        options.forEachIndexed { index, option ->
+            popup.menu.add(0, index, index, option).isEnabled = false
+        }
+        popup.menu.add(0, 99, options.size, "Ainda não disponível")
+        popup.setOnMenuItemClickListener { unavailable(title); true }
+        popup.show()
+    }
+
     private fun buildConsole() {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(bg)
-            setPadding(dp(10), dp(6), dp(10), dp(6))
-        }
-
-        val header = LinearLayout(this).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            orientation = LinearLayout.HORIZONTAL
-        }
-        header.addView(label("wMix  Camera", 19f).apply { setTypeface(null, Typeface.BOLD) },
-            LinearLayout.LayoutParams(0, dp(38), 1f))
-        header.addView(label("CAM 01", 12f, dim), LinearLayout.LayoutParams(dp(70), dp(38)))
-        tallyDot = label("●", 24f, dim)
-        header.addView(tallyDot, LinearLayout.LayoutParams(dp(36), dp(38)))
-        header.addView(button("Conexão") { openConnectionDialog() },
-            LinearLayout.LayoutParams(dp(95), dp(36)))
-        root.addView(header)
-
-        val main = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        // Camera preview remains full-screen; controls float over the picture.
+        val root = FrameLayout(this).apply { setBackgroundColor(bg) }
         frame = FrameLayout(this).apply {
             setPadding(dp(4), dp(4), dp(4), dp(4))
-            background = rounded(panel, Color.DKGRAY, 3)
+            background = rounded(bg, Color.rgb(43, 50, 58), 4)
         }
+        root.addView(frame, FrameLayout.LayoutParams(-1, -1))
         preview = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FIT_CENTER }
         frame.addView(preview, FrameLayout.LayoutParams(-1, -1))
         preview.setOnTouchListener { _, event ->
@@ -131,30 +128,103 @@ class MainActivity : ComponentActivity() {
                     FocusMeteringAction.Builder(point).build()
                 )
                 cameraStatus.text = "Foco por toque"
-                true
-            } else true
+            }
+            true
         }
-        main.addView(frame, LinearLayout.LayoutParams(0, -1, 1.65f))
 
-        val controlsScroll = ScrollView(this).apply { isFillViewport = true }
-        val controls = LinearLayout(this).apply {
+        val overlay = FrameLayout(this)
+        // Overlay is inside the Tally border; frame corners remain visible.
+        frame.addView(overlay, FrameLayout.LayoutParams(-1, -1))
+
+        fun floatingBar(): LinearLayout = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(9), dp(4), dp(9), dp(4))
+            background = rounded(Color.argb(204, 14, 19, 27))
+        }
+
+        val top = floatingBar()
+        val brand = label("wMix Camera", 16f).apply { setTypeface(null, Typeface.BOLD) }
+        top.addView(brand, LinearLayout.LayoutParams(0, dp(36), 1f))
+        cameraStatus = label("Iniciando câmera", 11f, dim)
+        top.addView(cameraStatus)
+        top.addView(label("   CAM 01   ", 12f, white))
+        tallyDot = label("●", 24f, dim)
+        top.addView(tallyDot)
+        top.addView(button("Conexão") { openConnectionDialog() },
+            LinearLayout.LayoutParams(dp(92), dp(34)))
+        overlay.addView(top, FrameLayout.LayoutParams(-1, dp(46), Gravity.TOP).apply {
+            leftMargin = dp(6); rightMargin = dp(6); topMargin = dp(6)
+        })
+
+        // Left rail: camera-specific actions, not a large sidebar.
+        val left = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(9), 0, 0, 0)
+            background = rounded(Color.argb(196, 14, 19, 27))
+            setPadding(dp(4), dp(6), dp(4), dp(6))
         }
+        lensButton = button("↺") { switchCamera() }
+        left.addView(lensButton, LinearLayout.LayoutParams(dp(52), dp(47)))
+        torchButton = button("☼") { toggleTorch() }
+        left.addView(torchButton, LinearLayout.LayoutParams(dp(52), dp(47)).apply { topMargin = dp(5) })
+        left.addView(button("⊞") { unavailable("Grade") },
+            LinearLayout.LayoutParams(dp(52), dp(47)).apply { topMargin = dp(5) })
+        overlay.addView(left, FrameLayout.LayoutParams(dp(64), -2, Gravity.START or Gravity.CENTER_VERTICAL).apply {
+            leftMargin = dp(9)
+        })
 
-        cameraStatus = label("Aguardando câmera", 12f, dim)
-        controls.addView(cameraStatus)
+        // Right rail: zoom shortcuts and camera action.
+        val right = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(Color.argb(196, 14, 19, 27))
+            setPadding(dp(4), dp(6), dp(4), dp(6))
+        }
+        right.addView(button("1×") {
+            val state = camera?.cameraInfo?.zoomState?.value
+            if (state != null) camera?.cameraControl?.setZoomRatio(1f.coerceIn(state.minZoomRatio, state.maxZoomRatio))
+        }, LinearLayout.LayoutParams(dp(54), dp(43)))
+        right.addView(button("2×") {
+            val state = camera?.cameraInfo?.zoomState?.value
+            if (state != null) camera?.cameraControl?.setZoomRatio(2f.coerceIn(state.minZoomRatio, state.maxZoomRatio))
+        }, LinearLayout.LayoutParams(dp(54), dp(43)).apply { topMargin = dp(5) })
+        right.addView(button("5×") {
+            val state = camera?.cameraInfo?.zoomState?.value
+            if (state != null) camera?.cameraControl?.setZoomRatio(5f.coerceIn(state.minZoomRatio, state.maxZoomRatio))
+        }, LinearLayout.LayoutParams(dp(54), dp(43)).apply { topMargin = dp(5) })
+        overlay.addView(right, FrameLayout.LayoutParams(dp(66), -2, Gravity.END or Gravity.CENTER_VERTICAL).apply {
+            rightMargin = dp(9)
+        })
 
-        val zoomPanel = section("ZOOM")
-        zoomValue = label("1.0×", 18f)
-        zoomPanel.addView(zoomValue)
+        // Two compact always-visible sliders; dynamic controls use real CameraX values.
+        val sliders = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(Color.argb(214, 13, 18, 25))
+            setPadding(dp(8), dp(2), dp(8), dp(2))
+        }
+        zoomValue = label("1.0×", 12f)
+        sliders.addView(label("ZOOM ", 10f, dim))
+        sliders.addView(zoomValue)
         zoomSeek = SeekBar(this).apply {
             max = 1000
             isEnabled = false
             progressTintList = android.content.res.ColorStateList.valueOf(green)
             thumbTintList = android.content.res.ColorStateList.valueOf(green)
         }
-        zoomPanel.addView(zoomSeek)
+        sliders.addView(zoomSeek, LinearLayout.LayoutParams(0, dp(32), 1f))
+        evValue = label("0 EV", 12f)
+        sliders.addView(label("EV ", 10f, dim))
+        sliders.addView(evValue)
+        evSeek = SeekBar(this).apply {
+            max = 100
+            isEnabled = false
+            progressTintList = android.content.res.ColorStateList.valueOf(green)
+            thumbTintList = android.content.res.ColorStateList.valueOf(green)
+        }
+        sliders.addView(evSeek, LinearLayout.LayoutParams(0, dp(32), 1f))
+        overlay.addView(sliders, FrameLayout.LayoutParams(-1, dp(42), Gravity.BOTTOM).apply {
+            bottomMargin = dp(56); leftMargin = dp(79); rightMargin = dp(79)
+        })
+
         zoomSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (!fromUser) return
@@ -167,24 +237,12 @@ class MainActivity : ComponentActivity() {
             override fun onStartTrackingTouch(s: SeekBar?) {}
             override fun onStopTrackingTouch(s: SeekBar?) {}
         })
-        controls.addView(zoomPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
-
-        val evPanel = section("EXPOSIÇÃO EV")
-        evValue = label("0 EV", 18f)
-        evPanel.addView(evValue)
-        evSeek = SeekBar(this).apply {
-            max = 100
-            isEnabled = false
-            progressTintList = android.content.res.ColorStateList.valueOf(green)
-            thumbTintList = android.content.res.ColorStateList.valueOf(green)
-        }
-        evPanel.addView(evSeek)
         evSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (!fromUser) return
                 camera?.cameraInfo?.exposureState?.let { state ->
                     val range = state.exposureCompensationRange
-                    if (range.lower <= range.upper) {
+                    if (range.lower < range.upper) {
                         val index = range.lower + ((range.upper - range.lower) * progress / 100f).roundToInt()
                         camera?.cameraControl?.setExposureCompensationIndex(index)
                         evValue.text = String.format("%.1f EV", index * state.exposureCompensationStep.toFloat())
@@ -194,37 +252,25 @@ class MainActivity : ComponentActivity() {
             override fun onStartTrackingTouch(s: SeekBar?) {}
             override fun onStopTrackingTouch(s: SeekBar?) {}
         })
-        controls.addView(evPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
 
-        val focusPanel = section("FOCO")
-        focusPanel.addView(label("AF contínuo • toque na imagem para focar", 12f))
-        controls.addView(focusPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
-
-        val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        lensButton = button("Trocar câmera") { switchCamera() }
-        tools.addView(lensButton, LinearLayout.LayoutParams(0, dp(44), 1f))
-        torchButton = button("Lanterna") { toggleTorch() }
-        tools.addView(torchButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(5) })
-        controls.addView(tools)
-
-        val readout = section("PARÂMETROS")
-        readout.addView(label("FPS: automático • resolução: perfil padrão", 12f))
-        readout.addView(label("ISO / shutter / WB / histograma: em desenvolvimento", 11f, dim))
-        readout.addView(label("Áudio / streaming: ainda não disponíveis", 11f, dim))
-        controls.addView(readout, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
-
-        controlsScroll.addView(controls)
-        main.addView(controlsScroll, LinearLayout.LayoutParams(0, -1, 1f))
-        root.addView(main, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        val footer = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        val bottom = floatingBar()
+        fun addChip(text: String, weight: Float = 1f, action: (View) -> Unit) {
+            val chip = button(text) {}
+            chip.setOnClickListener { action(it) }
+            bottom.addView(chip, LinearLayout.LayoutParams(0, dp(42), weight).apply {
+                leftMargin = dp(3)
+            })
         }
-        footer.addView(label("Tally: borda verde = Preview | vermelha = Program", 11f, dim),
-            LinearLayout.LayoutParams(0, dp(35), 1f))
-        footer.addView(label("Transmissão: OFF", 12f, dim))
-        root.addView(footer)
+        addChip("ISO Auto") { infoPopup(it, "ISO manual", listOf("ISO 100", "ISO 200", "ISO 400", "ISO 800", "ISO 1600")) }
+        addChip("SH Auto") { infoPopup(it, "Obturador manual", listOf("1/30", "1/60", "1/125", "1/250")) }
+        addChip("WB Auto") { infoPopup(it, "WB manual", listOf("3200 K", "4500 K", "5600 K", "6500 K")) }
+        addChip("AF") { Toast.makeText(this, "Toque na imagem para focar", Toast.LENGTH_SHORT).show() }
+        addChip("FPS Auto") { unavailable("Seleção 1080p 30/60") }
+        addChip("STREAM OFF", 1.3f) { unavailable("Transmissão ao Windows") }
+        overlay.addView(bottom, FrameLayout.LayoutParams(-1, dp(52), Gravity.BOTTOM).apply {
+            leftMargin = dp(6); rightMargin = dp(6); bottomMargin = dp(5)
+        })
+
         setContentView(root)
     }
 
