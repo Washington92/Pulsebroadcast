@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
- --background: 222 22% 8%; --foreground: 210 20% 94%; --card: 220 18% 14%; --panel: 220 20% 11%;
- --border: 220 13% 25%; --primary: 187 84% 48%; --primary-foreground: 220 25% 7%;
- --secondary: 220 16% 20%; --secondary-foreground: 210 15% 90%; --accent: 220 16% 28%;
- --muted: 220 13% 28%; --muted-foreground: 215 12% 67%; --tally-pgm: 0 82% 57%;
- --tally-pvw: 140 62% 48%; --warn: 37 92% 54%; --destructive-foreground: 0 0% 100%;
+ --background: 154 14% 6%; --foreground: 140 12% 94%; --card: 155 12% 9%; --panel: 155 13% 7%;
+ --border: 150 10% 20%; --primary: 88 90% 48%; --primary-foreground: 155 22% 6%;
+ --secondary: 150 9% 15%; --secondary-foreground: 140 8% 89%; --accent: 150 10% 21%;
+ --muted: 150 10% 24%; --muted-foreground: 148 7% 65%; --tally-pgm: 0 90% 58%;
+ --tally-pvw: 145 72% 43%; --warn: 37 92% 54%; --destructive-foreground: 0 0% 100%;
 }
 .glow-pgm { box-shadow: inset 0 0 0 2px hsl(var(--tally-pgm)); }
 .glow-pvw { box-shadow: inset 0 0 0 2px hsl(var(--tally-pvw)); }
@@ -26,3 +26,24 @@
 .wmix-toolbar button { border-radius: 8px; }
 .wmix-toolbar button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
 .wmix-toolbar button:active { filter: brightness(0.85); }
+
+/* Approved wMix broadcast reference: visual-only, no changes to media processing. */
+.wmix-broadcast { background: #101613; color: hsl(var(--foreground)); }
+.wmix-broadcast .wmix-toolbar {
+  background: #101613;
+  border-color: #26322b;
+  border-radius: 8px;
+}
+.wmix-broadcast :is(button, input, select):focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.wmix-broadcast button:disabled { cursor: not-allowed; }
+.wmix-broadcast .glow-pvw { box-shadow: inset 0 0 0 2px #19cb66; }
+.wmix-broadcast .glow-pgm { box-shadow: inset 0 0 0 2px #ef3d4c; }
+@media (prefers-reduced-motion: reduce) {
+  .wmix-broadcast *, .wmix-broadcast *::before, .wmix-broadcast *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
