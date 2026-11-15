@@ -156,6 +156,13 @@ impl LoadedObs {
             return Err(format!("Dados da libobs não encontrados: {}", data.display()));
         }
         let data = data.to_str().ok_or("Caminho de dados inválido")?;
+        // libobs appends shader names to this path. Extended Windows paths
+        // do not accept the forward slashes used by its data-file lookup.
+        let data = if let Some(unc) = data.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{unc}")
+        } else {
+            data.strip_prefix(r"\\?\").unwrap_or(data).to_owned()
+        };
         let data = CString::new(format!("{data}/"))
             .map_err(|_| "Caminho de dados inválido")?;
         let mut info = ObsVideoInfo {
