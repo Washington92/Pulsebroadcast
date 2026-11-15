@@ -536,6 +536,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
               style={{ gridTemplateColumns: `repeat(${zoom}, minmax(0, 1fr))` }}>
               {sources.map((s) => {
                 const isPgm = s.id === currentProgramId, isPvw = s.id === currentPreviewId;
+                const source = nativeSources[s.id - 1];
                 return (
                   <div key={s.id}
                     className={cn("rounded-md border bg-card p-1 transition-shadow",
@@ -566,6 +567,12 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
                       }}>✕</button>}
 
                     </div>
+                    {source && <div role="group" aria-label={"Ações de " + s.name} className="mt-1 flex gap-1">
+                      {nativeCut && <button type="button" className={cn(btn, "h-6 px-2 font-semibold")}
+                        title="Enviar direto ao Programa" onClick={() => nativeCut(source.id)}>CUT</button>}
+                      {nativeFade && <button type="button" className={cn(btn, "h-6 px-2 font-semibold text-primary")}
+                        title="Enviar ao Programa com transição" onClick={() => nativeFade(source.id, Math.round(durations[transition] * 1000))}>GO</button>}
+                    </div>}
                     <div className="mt-1 flex gap-0.5">
                       {[0, 1, 2, 3].map((i) => (
                         <button key={i} onClick={() => toggleOverlay(i, s.id)}
