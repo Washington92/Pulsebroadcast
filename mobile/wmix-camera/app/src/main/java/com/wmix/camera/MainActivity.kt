@@ -49,6 +49,31 @@ class MainActivity : ComponentActivity() {
     private var provider: ProcessCameraProvider? = null
     private var selector = CameraSelector.DEFAULT_BACK_CAMERA
     private var torchEnabled = false
+    private val lan = LanFrameSender()
+    private val lanHttp = okhttp3.OkHttpClient()
+    private val lanHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var lanConfig: Triple<String, String, String>? = null
+    private val lanTallyPoll = object : Runnable {
+        override fun run() {
+            val cfg = lanConfig ?: return
+            val req = okhttp3.Request.Builder().url("${cfg.first}/api/status?id=${cfg.second}")
+                .header("Authorization", "Bearer ${cfg.third}").build()
+            lanHttp.newCall(req).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    runOnUiThread { if (lanConfig == cfg) renderTally("UNKNOWN") }
+                }
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    response.use {
+                        val state = if (it.isSuccessful) try {
+                            org.json.JSONObject(it.body?.string() ?: "").optString("tally", "UNKNOWN")
+                        } catch (_: Exception) { "UNKNOWN" } else "UNKNOWN"
+                        runOnUiThread { if (lanConfig == cfg) renderTally(state) }
+                    }
+                }
+            })
+            lanHandler.postDelayed(this, 1000L)
+        }
+    }
 
     private fun dp(n: Int) = (n * resources.displayMetrics.density).roundToInt()
     private fun rounded(color: Int, borderColor: Int? = null, stroke: Int = 1): GradientDrawable =
@@ -150,6 +175,8 @@ class MainActivity : ComponentActivity() {
         top.addView(label("   CAM 01   ", 12f, white))
         tallyDot = label("●", 24f, dim)
         top.addView(tallyDot)
+        top.addView(button("Vídeo LAN") { openLanDialog() },
+            LinearLayout.LayoutParams(dp(95), dp(34)))
         top.addView(button("Conexão") { openConnectionDialog() },
             LinearLayout.LayoutParams(dp(92), dp(34)))
         overlay.addView(top, FrameLayout.LayoutParams(-1, dp(46), Gravity.TOP).apply {
@@ -274,6 +301,45 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
     }
 
+    private fun openLanDialog() {
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun field(hint: String, initial: String = "") = EditText(this).also {
+            it.hint = hint; it.setSingleLine(true); it.setText(initial); fields.addView(it)
+        }
+        val host = field("http://IP-DO-PC:8787", lanConfig?.first ?: "")
+        val id = field("Identificador", lanConfig?.second ?: "cam-01")
+        val token = field("Token (20+ caracteres)").apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        android.app.AlertDialog.Builder(this).setTitle("Vídeo LAN • teste experimental")
+            .setMessage("JPEG 2 fps, sem criptografia. Utilize apenas em rede local isolada.")
+            .setView(fields)
+            .setPositiveButton("Conectar") { _, _ ->
+                try {
+                    val base = host.text.toString().trim().trimEnd('/')
+                    val cameraId = id.text.toString().trim()
+                    val secret = token.text.toString()
+                    lan.configure(base, cameraId, secret)
+                    lanConfig = Triple(base, cameraId, secret)
+                    lanHandler.removeCallbacks(lanTallyPoll)
+                    lanHandler.post(lanTallyPoll)
+                    bindCamera()
+                    Toast.makeText(this, "Enviando JPEG LAN", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, e.message ?: "Falha na configuração", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNeutralButton("Desconectar") { _, _ ->
+                lan.disconnect(); lanConfig = null
+                lanHandler.removeCallbacks(lanTallyPoll)
+                renderTally("UNKNOWN"); bindCamera()
+            }
+            .setNegativeButton("Cancelar", null).show()
+    }
+
     private fun openConnectionDialog() {
         val fields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -324,7 +390,9 @@ class MainActivity : ComponentActivity() {
             val useCase = Preview.Builder().build()
             useCase.surfaceProvider = preview.surfaceProvider
             p.unbindAll()
-            camera = p.bindToLifecycle(this, selector, useCase)
+            camera = if (lan.connected()) {
+                p.bindToLifecycle(this, selector, useCase, lan.createAnalysis())
+            } else p.bindToLifecycle(this, selector, useCase)
             torchEnabled = false
             cameraStatus.text = if (selector == CameraSelector.DEFAULT_BACK_CAMERA) "Câmera traseira" else "Câmera frontal"
             torchButton.isEnabled = camera?.cameraInfo?.hasFlashUnit() == true
@@ -381,6 +449,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        lanConfig = null
+        lanHandler.removeCallbacks(lanTallyPoll)
+        lan.close()
+        lanHttp.dispatcher.cancelAll()
         client.disconnect()
         super.onDestroy()
     }
