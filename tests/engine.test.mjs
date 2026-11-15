@@ -16,6 +16,7 @@ function harness() {
   };
   const canvas = () => ({ width: 1280, height: 720, getContext: () => ctx });
   const context = {
+    createImageBitmap: async () => ({ width: 640, height: 360, close() {} }),
     exports: {},
     MediaStream: class {
       constructor() { this.tracks = []; }
@@ -26,7 +27,13 @@ function harness() {
     },
     document: {
       createElement(type) {
-        if (type === "canvas") return canvas();
+        if (type === "canvas") return {
+          ...canvas(),
+          captureStream() {
+            const track = { label: "internal-canvas-track", stop() {}, addEventListener() {} };
+            return { getVideoTracks: () => [track], getTracks: () => [track] };
+          },
+        };
         if (type === "video") return {
           readyState: 3, videoWidth: 1280, videoHeight: 720,
           play: () => Promise.resolve(), pause() {}, set srcObject(_) {},
@@ -71,6 +78,15 @@ function harness() {
   vm.runInNewContext(compiled, context, { filename: "WmixEngine.js" });
   return { engine: new context.exports.WmixEngine(), canvas, calls, tracks, advance(ms) { clock += ms; } };
 }
+
+test("Imported image keeps the filename instead of the canvas track label", async () => {
+  const { engine } = harness();
+  const id = await engine.addImage({ name: "Cena azul.final.png", type: "image/png", size: 1024 });
+  assert.equal(engine.list().find(source => source.id === id).name, "Cena azul.final.png");
+  const camera = await engine.addCamera();
+  assert.equal(engine.list().find(source => source.id === camera).name, "Camera 2");
+  engine.dispose();
+});
 
 test("CUT replaces Program and cancels an active FADE", async () => {
   const { engine, canvas } = harness();

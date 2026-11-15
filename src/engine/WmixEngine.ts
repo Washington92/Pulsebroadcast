@@ -185,7 +185,7 @@ export class WmixEngine {
       if (!ctx) throw new Error("Não foi possível preparar a imagem.");
       ctx.drawImage(bitmap, 0, 0);
       const stream = canvas.captureStream(1);
-      const id = this.addStream(stream, file.name.replace(/\\.[^.]+$/, ""), "image");
+      const id = this.addStream(stream, file.name, "image");
       // Ensure a frame is available even when the canvas is otherwise static.
       const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
       track?.requestFrame?.();
@@ -213,7 +213,7 @@ export class WmixEngine {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas indisponível para reprodução.");
       const stream = canvas.captureStream(30);
-      const id = this.addStream(stream, file.name.replace(/\\.[^.]+$/, ""), "video");
+      const id = this.addStream(stream, file.name, "video");
       const entry = { player, url, frame: 0, canvas };
       this.mediaPlayers.set(id, entry);
       const paint = () => {
