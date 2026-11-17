@@ -38,3 +38,9 @@ O build executa `tsc -b && vite build`. Para conferir resultados automatizados, 
 - `develop`: desenvolvimento e validação.
 
 O projeto não incorpora código proprietário do vMix ou do OBS.
+
+## Diagnóstico do painel libobs (17/11/2026)
+
+O painel nativo mostra o resultado de `libobs_status` após uma tentativa de inicialização que falhe, evitando exibir um estado anterior. A mensagem **Vídeo inicializado (sem fontes nativas)** significa somente que a inicialização do pipeline de vídeo retornou sucesso; não comprova captura de webcam, renderização nos monitores nem CUT/FADE nativos. O Preview/Program operacional da interface permanece no compositor Canvas.
+
+**Critérios para considerar a integração nativa pronta:** em Windows com OBS 33.0.1 compatível, carregar plugins e uma webcam, exibir quadros nativos no Preview, executar CUT para Program, testar perda e recuperação da fonte e registrar evidências do build e dos testes. Nenhum desses testes físicos foi executado neste incremento.
