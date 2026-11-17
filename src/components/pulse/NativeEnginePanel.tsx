@@ -22,13 +22,18 @@ export function NativeEnginePanel() {
     setBusy(true);
     setError("");
     try { setStatus(await invoke(command, command === "start_libobs" ? { path } : {})); }
-    catch (e) { setError(String(e)); }
+    catch (e) {
+      setError(String(e));
+      // Uma falha de inicialização não deve deixar o painel exibindo estado antigo.
+      try { setStatus(await invoke("libobs_status")); }
+      catch { setStatus(null); }
+    }
     finally { setBusy(false); }
   }
   return <section className="rounded-lg border border-border bg-card p-2 text-xs text-foreground shadow-lg" aria-label="Motor nativo libobs">
     <div className="mb-1 flex items-center gap-2">
       <strong>Motor libobs</strong>
-      <span role="status">{!invoke ? "Somente no desktop Tauri" : status?.video_ready ? "Vídeo configurado" : status?.initialized ? "Inicializado (sem vídeo)" : "Desligado"}</span>
+      <span role="status">{!invoke ? "Somente no desktop Tauri" : status?.video_ready ? "Vídeo inicializado (sem fontes nativas)" : status?.initialized ? "Inicializado (sem vídeo)" : "Desligado"}</span>
     </div>
     {invoke && <>
       <label className="flex items-center gap-2">DLL
@@ -40,6 +45,7 @@ export function NativeEnginePanel() {
       </div>
       {status?.message && <p className="mt-1 max-w-72 text-muted-foreground">{status.message}</p>}
       {status?.version && <p>libobs {status.version}</p>}
+      {status?.initialized && <p className="mt-1 text-muted-foreground">Preview/Program e CUT ainda utilizam Canvas; a libobs não está conectada às fontes.</p>}
     </>}
     {error && <p role="alert" className="mt-1 break-words text-red-400">{error}</p>}
   </section>;
