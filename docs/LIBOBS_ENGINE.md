@@ -42,6 +42,17 @@ Critérios de aceite do primeiro pipeline audiovisual:
 - Testar perda/recuperação da câmera, encerramento e reinicialização.
 - Registrar build, logs e evidências reais; não usar screenshots de protótipo como prova de execução.
 
+## Smoke test de display e Program
+
+`tests/libobs_preview_cut_smoke.ps1` foi ajustado para o contrato do OBS 33.0.1:
+
+- `obs_video_info.graphics_module` usa `libobs-d3d11`, não o caminho do DLL.
+- Configura áudio estéreo a 48 kHz e carrega os módulos pelos diretórios `obs-plugins/64bit` e `data/obs-plugins/%module%`.
+- Usa a assinatura de um argumento de `obs_display_create(gs_init_data*)`; a cor de fundo é definida separadamente por `obs_display_set_background_color()`.
+- Mantém o estado de exibição da fonte com `obs_source_inc_showing()`/`obs_source_dec_showing()`.
+
+O teste completo usa uma fonte sintética `color_source_v3`: ele verifica o callback de desenho do display e a mudança de quadros no canal Program. Não é uma captura de webcam nem prova de duas cenas independentes. O modo `-CompileOnly` compila as declarações C# de interoperabilidade sem carregar OBS; esse modo foi incluído no workflow Windows. A execução completa ainda exige OBS 33.0.1 instalado e uma sessão Windows, e não foi executada neste incremento.
+
 ## Licenciamento
 
 A libobs é distribuída sob GPL-2.0-or-later. Antes de distribuir instaladores, revisar obrigações de licença, avisos, plugins e disponibilização do código correspondente.
