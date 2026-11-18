@@ -15,6 +15,7 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Threading;
 using System.Runtime.InteropServices;
+using System.IO;
 public static class ObsDisplayProbe {
  [DllImport("kernel32",CharSet=CharSet.Unicode)] static extern IntPtr LoadLibraryExW(string p,IntPtr r,uint f);
  [DllImport("kernel32")] static extern IntPtr GetProcAddress(IntPtr h,string n);
@@ -32,8 +33,10 @@ public static class ObsDisplayProbe {
  [MarshalAs(UnmanagedType.I1)] public bool gpu;
  public int cs,range,scale;
  }
- [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int Open(out IntPtr module,string binary,string data);
- [UnmanagedFunctionPointer(CallingConvention.Cdecl)] [return:MarshalAs(UnmanagedType.I1)] delegate bool Init(IntPtr module);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] [return:MarshalAs(UnmanagedType.I1)] delegate bool ResetAudio(ref Audio audio);
+ [StructLayout(LayoutKind.Sequential)] struct Audio { public uint samplesPerSec; public int speakers; }
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void AddModulePath(string binary,string data);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void LoadModules();
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr Create(string id,string name,IntPtr settings,IntPtr hotkeys);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void Output(uint channel,IntPtr source);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void Release(IntPtr source);
@@ -42,8 +45,11 @@ public static class ObsDisplayProbe {
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void Disconnect(Frame callback,IntPtr state);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr CreateWindowExW(uint ex,string cls,string title,uint style,int x,int y,int w,int h,IntPtr parent,IntPtr menu,IntPtr instance,IntPtr param);
  [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr hwnd);
+ // OBS 33.0.1 gs_init_data: gs_window(hwnd), cx, cy, num_backbuffers, format, zsformat, adapter.
  [StructLayout(LayoutKind.Sequential)] struct DisplayInfo { public IntPtr hwnd; public uint w,h,buffers; public int format,depth; public uint adapter; }
- [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr DisplayCreate(ref DisplayInfo data,uint background);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr DisplayCreate(ref DisplayInfo data);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void DisplayBackground(IntPtr display,uint color);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void SourceVisibility(IntPtr source);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void Draw(IntPtr param,uint width,uint height);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void RegisterDraw(IntPtr display,Draw callback,IntPtr param);
  static T Get<T>(IntPtr h,string n) where T:Delegate => Marshal.GetDelegateForFunctionPointer<T>(GetProcAddress(h,n));
@@ -55,23 +61,36 @@ public static class ObsDisplayProbe {
  if(!Get<Start>(h,"obs_startup")("pt-BR",IntPtr.Zero,IntPtr.Zero))throw new Exception("startup failed");
  try {
  Get<PathAdd>(h,"obs_add_data_path")(root+@"\data\libobs/");
- var module=Marshal.StringToCoTaskMemUTF8(root+@"\bin\64bit\libobs-d3d11.dll");
+ // obs_video_info.graphics_module expects the module identifier, not a DLL path.
+ var module=Marshal.StringToCoTaskMemUTF8("libobs-d3d11");
  try {
  var v=new Video{module=module,num=30,den=1,bw=1280,bh=720,ow=1280,oh=720,format=2,gpu=true,cs=2,range=1};
  int rc=Get<Reset>(h,"obs_reset_video")(ref v);
  Console.WriteLine("obs_reset_video="+rc);
  if(rc!=0)throw new Exception("Video reset failed");
- string plugin=root+@"\core\image-source";
- int opened=Get<Open>(h,"obs_open_module")(out IntPtr colorModule,plugin+@"\image-source.dll",plugin+@"\data");
- if(opened!=0||!Get<Init>(h,"obs_init_module")(colorModule)) throw new Exception("image-source failed: "+opened);
+ var audio=new Audio{samplesPerSec=48000,speakers=2}; // SPEAKERS_STEREO
+ if(!Get<ResetAudio>(h,"obs_reset_audio")(ref audio)) throw new Exception("Audio reset failed");
+ string pluginBin=root+@"\obs-plugins\64bit";
+ string pluginData=root+@"\data\obs-plugins\%module%";
+ if(!Directory.Exists(pluginBin)||!Directory.Exists(root+@"\data\obs-plugins"))
+     throw new Exception("OBS plugin directories are missing");
+ Get<AddModulePath>(h,"obs_add_module_path")(pluginBin,pluginData);
+ Get<LoadModules>(h,"obs_load_all_modules")();
+ Get<LoadModules>(h,"obs_post_load_modules")();
  var source=Get<Create>(h,"obs_source_create")("color_source_v3","wMix Color Test",IntPtr.Zero,IntPtr.Zero);
- if(source==IntPtr.Zero) throw new Exception("source creation failed");
- try { var hwnd=CreateWindowExW(0,"STATIC","wMix preview probe",0x80000000,0,0,320,180,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero);
+ if(source==IntPtr.Zero) throw new Exception("color_source_v3 unavailable; check image-source module loading");
+ try {
+ var incShowing=Get<SourceVisibility>(h,"obs_source_inc_showing");
+ var decShowing=Get<SourceVisibility>(h,"obs_source_dec_showing");
+ incShowing(source);
+ try {
+ var hwnd=CreateWindowExW(0,"STATIC","wMix preview probe",0x80000000,0,0,320,180,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero,IntPtr.Zero);
  if(hwnd==IntPtr.Zero) throw new Exception("Cannot create window");
  try {
  var info=new DisplayInfo{hwnd=hwnd,w=320,h=180,buffers=1,format=3};
- var display=Get<DisplayCreate>(h,"obs_display_create")(ref info,0);
+ var display=Get<DisplayCreate>(h,"obs_display_create")(ref info);
  if(display==IntPtr.Zero) throw new Exception("Cannot create OBS display");
+ Get<DisplayBackground>(h,"obs_display_set_background_color")(display,0);
  int draws=0;
  var render=Get<Release>(h,"obs_source_video_render");
  Draw draw=(param,w,h2)=>{render(source);Interlocked.Increment(ref draws);};
@@ -97,6 +116,7 @@ public static class ObsDisplayProbe {
  } finally {disconnect(callback,IntPtr.Zero);output(0,IntPtr.Zero);}
  }finally{Get<RegisterDraw>(h,"obs_display_remove_draw_callback")(display,draw,IntPtr.Zero);Get<Release>(h,"obs_display_destroy")(display);}
  }finally{DestroyWindow(hwnd);}
+ } finally { decShowing(source); }
  }finally{Get<Release>(h,"obs_source_release")(source);}
  uint frames=Get<Frames>(h,"obs_get_total_frames")();
  Console.WriteLine("obs_get_total_frames="+frames);
