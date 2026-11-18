@@ -1,13 +1,16 @@
 param(
-    [string]$ObsRoot = 'C:\Program Files\obs-studio'
+    [string]$ObsRoot = 'C:\Program Files\obs-studio',
+    [switch]$CompileOnly
 )
 
 $ErrorActionPreference = 'Stop'
-$ObsRoot = (Resolve-Path -LiteralPath $ObsRoot).Path
-$dll = Join-Path $ObsRoot 'bin/64bit/obs.dll'
-$version = (Get-Item -LiteralPath $dll).VersionInfo.FileVersion
-if ($version -ne '33.0.1') {
-    throw "This probe uses the OBS 33.0.1 ABI. Found: $version"
+if (-not $CompileOnly) {
+    $ObsRoot = (Resolve-Path -LiteralPath $ObsRoot).Path
+    $dll = Join-Path $ObsRoot 'bin/64bit/obs.dll'
+    $version = (Get-Item -LiteralPath $dll).VersionInfo.ProductVersion
+    if ($version -notmatch '^33\.0\.1(?:$|[^0-9])') {
+        throw "This probe uses the OBS 33.0.1 ABI. Found: $version"
+    }
 }
 
 # Run with PowerShell 7 x64 in a separate process from wMix.
@@ -127,4 +130,8 @@ public static class ObsDisplayProbe {
  }
 }
 '@
+if ($CompileOnly) {
+    Write-Host 'C# libobs interop declarations compiled successfully; native OBS execution skipped.'
+    return
+}
 [ObsDisplayProbe]::Run($ObsRoot)
