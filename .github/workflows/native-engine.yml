@@ -43,6 +43,11 @@ jobs:
           PY
       - name: Install FFmpeg for synthetic encoder test
         run: sudo apt-get install -y ffmpeg
+      - name: Stage CI-only FFmpeg path required by Tauri config
+        run: |
+          mkdir -p src-tauri/resources
+          install -m 0755 "$(command -v ffmpeg)" src-tauri/resources/ffmpeg.exe
+          test -x src-tauri/resources/ffmpeg.exe
       - name: Validate synthetic H264/AAC encoding and FLV output
         run: python3 tests/synthetic_encoder_smoke.py
       - name: Validate local RTMP transport and received A/V codecs
