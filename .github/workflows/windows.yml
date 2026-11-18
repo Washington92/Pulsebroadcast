@@ -57,6 +57,9 @@ jobs:
         run: |
           cargo test
           cargo check
+      - name: Compile libobs Preview/Program smoke-test interop
+        shell: pwsh
+        run: pwsh -NoProfile -File tests/libobs_preview_cut_smoke.ps1 -CompileOnly
       - run: npm run tauri build
       - name: Verify FFmpeg included in installer payload
         shell: pwsh
