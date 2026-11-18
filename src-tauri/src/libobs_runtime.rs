@@ -11,6 +11,9 @@ type ObsStartup = unsafe extern "C" fn(*const c_char, *const c_char, *mut c_void
 type ObsShutdown = unsafe extern "C" fn();
 type ObsVersion = unsafe extern "C" fn() -> *const c_char;
 
+// obs_video_info.graphics_module is a libobs module identifier, not a DLL path.
+const GRAPHICS_MODULE_NAME: &str = "libobs-d3d11";
+
 // Layout from OBS Studio 33.0.1 libobs/obs.h.
 #[cfg(windows)]
 #[repr(C)]
@@ -156,12 +159,13 @@ fn supports_video_abi(version: &str) -> bool {
 #[cfg(windows)]
 impl LoadedObs {
     fn initialize_video(&self, dll: &Path) -> Result<(), String> {
-        let graphics = dll.with_file_name("libobs-d3d11.dll");
-        if !graphics.is_file() {
-            return Err(format!("Módulo D3D11 não encontrado: {}", graphics.display()));
+        let graphics_dll = dll.with_file_name("libobs-d3d11.dll");
+        if !graphics_dll.is_file() {
+            return Err(format!("Módulo D3D11 não encontrado: {}", graphics_dll.display()));
         }
-        let graphics = CString::new(graphics.to_str().ok_or("Caminho D3D11 inválido")?)
-            .map_err(|_| "Caminho D3D11 inválido")?;
+        // The OBS API expects "libobs-d3d11" here, not the absolute DLL filename.
+        let graphics = CString::new(GRAPHICS_MODULE_NAME)
+            .map_err(|_| "Identificador D3D11 inválido")?;
         let data = dll.parent().and_then(Path::parent).and_then(Path::parent)
             .ok_or("Instalação OBS incompleta")?.join("data").join("libobs");
         if !data.join("default.effect").is_file() {
@@ -234,7 +238,7 @@ pub fn libobs_status(runtime: tauri::State<'_, LibobsRuntime>) -> Result<LibobsR
 
 #[cfg(test)]
 mod tests {
-    use super::LibobsRuntime;
+    use super::{LibobsRuntime, GRAPHICS_MODULE_NAME};
     #[cfg(windows)]
     use super::supports_video_abi;
     #[cfg(windows)]
@@ -245,6 +249,12 @@ mod tests {
         assert!(!supports_video_abi("34.0.0"));
         assert!(!supports_video_abi(""));
     }
+    #[test]
+    fn d3d11_video_config_uses_module_identifier_not_dll_path() {
+        assert_eq!(GRAPHICS_MODULE_NAME, "libobs-d3d11");
+        assert!(!std::path::Path::new(GRAPHICS_MODULE_NAME).is_absolute());
+    }
+
     #[test]
     fn rejects_non_absolute_path() {
         assert!(LibobsRuntime::default().start("obs.dll".into()).is_err());
