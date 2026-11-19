@@ -50,7 +50,8 @@ public static class ObsDisplayProbe {
  [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr hwnd);
  // OBS 33.0.1 gs_init_data: gs_window(hwnd), cx, cy, num_backbuffers, format, zsformat, adapter.
  [StructLayout(LayoutKind.Sequential)] struct DisplayInfo { public IntPtr hwnd; public uint w,h,buffers; public int format,depth; public uint adapter; }
- [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr DisplayCreate(ref DisplayInfo data);
+ // OBS 33.0.1: obs_display_create(gs_init_data*, uint32_t background_color).
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr DisplayCreate(ref DisplayInfo data,uint backgroundColor);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void DisplayBackground(IntPtr display,uint color);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void SourceVisibility(IntPtr source);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void Draw(IntPtr param,uint width,uint height);
@@ -91,7 +92,7 @@ public static class ObsDisplayProbe {
  if(hwnd==IntPtr.Zero) throw new Exception("Cannot create window");
  try {
  var info=new DisplayInfo{hwnd=hwnd,w=320,h=180,buffers=1,format=3};
- var display=Get<DisplayCreate>(h,"obs_display_create")(ref info);
+ var display=Get<DisplayCreate>(h,"obs_display_create")(ref info,0);
  if(display==IntPtr.Zero) throw new Exception("Cannot create OBS display");
  Get<DisplayBackground>(h,"obs_display_set_background_color")(display,0);
  int draws=0;

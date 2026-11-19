@@ -61,3 +61,10 @@ test("OBS rejects URL credentials and rejects outstanding requests on disconnect
   client.disconnect();
   await assert.rejects(request, /disconnected/);
 });
+
+
+test("OBS 33.0.1 display interop passes the required background-color argument", () => {
+  const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
+  assert.match(smoke, /delegate IntPtr DisplayCreate\\(ref DisplayInfo data,uint backgroundColor\\);/);
+  assert.match(smoke, /Get<DisplayCreate>\\(h,"obs_display_create"\\)\\(ref info,0\\)/);
+});
