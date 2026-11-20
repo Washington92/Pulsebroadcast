@@ -241,6 +241,26 @@ mod tests {
     use super::{LibobsRuntime, GRAPHICS_MODULE_NAME};
     #[cfg(windows)]
     use super::supports_video_abi;
+    #[cfg(all(windows, target_pointer_width = "64"))]
+    #[test]
+    fn obs_video_info_matches_obs_33_0_1_x64_abi_layout() {
+        use std::mem::{offset_of, size_of};
+        use super::ObsVideoInfo;
+
+        // OBS 33.0.1 libobs/obs.h: pointer + six u32 fields + enum/bool tail.
+        // Keep these offsets guarded because a mismatch here is undefined behavior
+        // when obs_reset_video reads the structure across the C ABI.
+        assert_eq!(size_of::<ObsVideoInfo>(), 56);
+        assert_eq!(offset_of!(ObsVideoInfo, graphics_module), 0);
+        assert_eq!(offset_of!(ObsVideoInfo, fps_num), 8);
+        assert_eq!(offset_of!(ObsVideoInfo, output_format), 32);
+        assert_eq!(offset_of!(ObsVideoInfo, adapter), 36);
+        assert_eq!(offset_of!(ObsVideoInfo, gpu_conversion), 40);
+        assert_eq!(offset_of!(ObsVideoInfo, colorspace), 44);
+        assert_eq!(offset_of!(ObsVideoInfo, range), 48);
+        assert_eq!(offset_of!(ObsVideoInfo, scale_type), 52);
+    }
+
     #[cfg(windows)]
     #[test]
     fn rejects_unvalidated_video_abi_versions() {
