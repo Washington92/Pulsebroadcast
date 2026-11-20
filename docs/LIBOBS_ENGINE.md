@@ -15,6 +15,12 @@ O código atual em `src-tauri/src/libobs_runtime.rs` é uma etapa experimental d
 - Ainda não configura áudio, não carrega módulos/plugins, não cria fontes de câmera e não cria displays nativos.
 - O painel informa explicitamente que Preview/Program e CUT continuam no compositor Canvas.
 
+## Proteção da ABI C no Windows x64
+
+O teste Rust `obs_video_info_matches_obs_33_0_1_x64_abi_layout` fixa o tamanho de `ObsVideoInfo` em 56 bytes e verifica offsets críticos (ponteiro de módulo, FPS, formato, adapter, conversão GPU e enums finais). Ele roda apenas em Windows x64, o mesmo alvo do runtime experimental.
+
+Essa verificação protege contra alterações acidentais no `#[repr(C)]`, mas **não** prova que uma DLL foi carregada, que `obs_reset_video()` funcionou ou que existe renderização. A estrutura de referência é a de OBS 33.0.1; comparar sempre com o cabeçalho da mesma versão instalada. Referências: [OBS Core API](https://docs.obsproject.com/reference-core) e [cabeçalho libobs 33.0.1](https://fossies.org/dox/obs-studio-33.0.1/obs_8h_source.html).
+
 ## Sequência técnica obrigatória
 
 Para a integração completa, seguir a sequência documentada pelo OBS para inicializar o core:
