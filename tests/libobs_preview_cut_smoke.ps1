@@ -20,7 +20,11 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using System.IO;
 public static class ObsDisplayProbe {
- [DllImport("kernel32",CharSet=CharSet.Unicode)] static extern IntPtr LoadLibraryExW(string p,IntPtr r,uint f);
+ [DllImport("kernel32",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool SetDefaultDllDirectories(uint flags);
+ [DllImport("kernel32",CharSet=CharSet.Unicode,SetLastError=true)] static extern IntPtr AddDllDirectory(string path);
+ [DllImport("kernel32",SetLastError=true)] static extern bool RemoveDllDirectory(IntPtr cookie);
+ [DllImport("kernel32",CharSet=CharSet.Unicode,SetLastError=true)] static extern bool SetCurrentDirectoryW(string path);
+ [DllImport("kernel32",CharSet=CharSet.Unicode,SetLastError=true)] static extern IntPtr LoadLibraryExW(string p,IntPtr r,uint f);
  [DllImport("kernel32")] static extern IntPtr GetProcAddress(IntPtr h,string n);
  [DllImport("kernel32")] static extern bool FreeLibrary(IntPtr h);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] [return:MarshalAs(UnmanagedType.I1)] delegate bool Start(string s,IntPtr p,IntPtr q);
@@ -58,9 +62,25 @@ public static class ObsDisplayProbe {
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void RegisterDraw(IntPtr display,Draw callback,IntPtr param);
  static T Get<T>(IntPtr h,string n) where T:Delegate => Marshal.GetDelegateForFunctionPointer<T>(GetProcAddress(h,n));
  public static void Run(string root){
-
- var h=LoadLibraryExW(root+@"\bin\64bit\obs.dll",IntPtr.Zero,0x1100);
- if(h==IntPtr.Zero)throw new Exception("LoadLibrary failed");
+ string bin=Path.Combine(root,"bin","64bit");
+ string pluginBin=Path.Combine(root,"obs-plugins","64bit");
+ if(!Directory.Exists(bin)||!Directory.Exists(pluginBin))
+     throw new Exception("OBS binary or plugin directory is missing");
+ if(!SetDefaultDllDirectories(0x1000))
+     throw new Exception("SetDefaultDllDirectories failed: "+Marshal.GetLastWin32Error());
+ IntPtr binCookie=AddDllDirectory(bin);
+ if(binCookie==IntPtr.Zero)
+     throw new Exception("AddDllDirectory(bin) failed: "+Marshal.GetLastWin32Error());
+ IntPtr pluginCookie=AddDllDirectory(pluginBin);
+ if(pluginCookie==IntPtr.Zero) {
+     RemoveDllDirectory(binCookie);
+     throw new Exception("AddDllDirectory(pluginBin) failed: "+Marshal.GetLastWin32Error());
+ }
+ try {
+ if(!SetCurrentDirectoryW(bin))
+     throw new Exception("SetCurrentDirectoryW failed: "+Marshal.GetLastWin32Error());
+ var h=LoadLibraryExW(Path.Combine(bin,"obs.dll"),IntPtr.Zero,0x1100);
+ if(h==IntPtr.Zero)throw new Exception("LoadLibrary failed: "+Marshal.GetLastWin32Error());
  try {
  if(!Get<Start>(h,"obs_startup")("pt-BR",IntPtr.Zero,IntPtr.Zero))throw new Exception("startup failed");
  try {
@@ -74,8 +94,7 @@ public static class ObsDisplayProbe {
  if(rc!=0)throw new Exception("Video reset failed");
  var audio=new Audio{samplesPerSec=48000,speakers=2}; // SPEAKERS_STEREO
  if(!Get<ResetAudio>(h,"obs_reset_audio")(ref audio)) throw new Exception("Audio reset failed");
- string pluginBin=root+@"\obs-plugins\64bit";
- string pluginData=root+@"\data\obs-plugins\%module%";
+ string pluginData=Path.Combine(root,"data","obs-plugins","%module%");
  if(!Directory.Exists(pluginBin)||!Directory.Exists(root+@"\data\obs-plugins"))
      throw new Exception("OBS plugin directories are missing");
  Get<AddModulePath>(h,"obs_add_module_path")(pluginBin,pluginData);
@@ -128,6 +147,10 @@ public static class ObsDisplayProbe {
  }finally{Marshal.FreeCoTaskMem(module);}
  }finally{Get<Stop>(h,"obs_shutdown")();}
  }finally{FreeLibrary(h);}
+ } finally {
+     RemoveDllDirectory(pluginCookie);
+     RemoveDllDirectory(binCookie);
+ }
  }
 }
 '@

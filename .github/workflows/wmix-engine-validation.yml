@@ -76,3 +76,51 @@ jobs:
       - name: Confirm libobs scope
         shell: pwsh
         run: Write-Host 'Static compile only; actual libobs startup, camera capture, Preview/Program and GPU require Windows hardware validation.'
+
+  libobs-runtime-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: obs-cache
+        with:
+          path: ${{ runner.temp }}/obs-33.0.1
+          key: obs-studio-33.0.1-windows-x64
+      - name: Download pinned OBS Studio 33.0.1 x64 package
+        if: steps.obs-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'OBS-Studio-33.0.1-Windows-x64.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'obs-33.0.1'
+          Invoke-WebRequest -Uri 'https://github.com/obsproject/obs-studio/releases/download/33.0.1/OBS-Studio-33.0.1-Windows-x64.zip' -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination -Force
+      - name: Resolve portable OBS root
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'obs-33.0.1'
+          $dll = Get-ChildItem -LiteralPath $destination -Filter 'obs.dll' -Recurse -File |
+            Where-Object { $_.FullName -match '[\\/]+bin[\\/]+64bit[\\/]+obs\.dll$' } |
+            Select-Object -First 1
+          if (-not $dll) { throw "OBS 33.0.1 x64 package did not contain bin/64bit/obs.dll" }
+          $obsRoot = $dll.Directory.Parent.Parent.FullName
+          "OBS_ROOT=$obsRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "OBS root: $obsRoot"
+          Write-Host "OBS ProductVersion: $((Get-Item -LiteralPath $dll.FullName).VersionInfo.ProductVersion)"
+      - name: Run libobs 33.0.1 D3D11, audio, module and display smoke test
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'libobs-runtime-smoke.log'
+          Start-Transcript -Path $log
+          try {
+            & "$PSHOME\pwsh.exe" -NoProfile -File tests/libobs_preview_cut_smoke.ps1 -ObsRoot $env:OBS_ROOT
+          } finally {
+            Stop-Transcript
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: libobs-runtime-smoke-log
+          path: ${{ runner.temp }}/libobs-runtime-smoke.log
+          if-no-files-found: ignore
+          retention-days: 7

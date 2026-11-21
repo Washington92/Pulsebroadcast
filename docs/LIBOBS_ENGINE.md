@@ -57,7 +57,7 @@ Critérios de aceite do primeiro pipeline audiovisual:
 - Usa a assinatura oficial do OBS 33.0.1 `obs_display_create(gs_init_data*, uint32_t background_color)`; a cor inicial é passada na criação e pode ser atualizada depois por `obs_display_set_background_color()`.
 - Mantém o estado de exibição da fonte com `obs_source_inc_showing()`/`obs_source_dec_showing()`.
 
-O teste completo usa uma fonte sintética `color_source_v3`: ele verifica o callback de desenho do display e a mudança de quadros no canal Program. Não é uma captura de webcam nem prova de duas cenas independentes. O modo `-CompileOnly` compila as declarações C# de interoperabilidade sem carregar OBS; esse modo foi incluído no workflow Windows. A execução completa ainda exige OBS 33.0.1 instalado e uma sessão Windows, e não foi executada neste incremento.
+O teste completo usa uma fonte sintética `color_source_v3`: verifica um callback de desenho de um único `obs_display`, a geração de quadros e a mudança de saída após definir a fonte no canal 0. Isso **não** prova uma transição CUT entre duas cenas, dois displays independentes, captura de webcam, integração com Tauri ou o processo sidecar final. O modo `-CompileOnly` compila as declarações C# de interoperabilidade sem carregar OBS. O workflow `wMix engine validation (Windows)` baixa a distribuição portátil oficial OBS 33.0.1 x64 e executa o smoke test real em `windows-latest`; o resultado deve ser consultado no job `libobs-runtime-smoke` de cada commit.
 
 ## Licenciamento
 
@@ -66,3 +66,8 @@ A libobs é distribuída sob GPL-2.0-or-later. Antes de distribuir instaladores,
 ## Limites deste incremento
 
 A correção do identificador D3D11 reduz uma incompatibilidade com o contrato de `obs_video_info`, mas não comprova que o runtime inicializa em uma máquina Windows. Os testes unitários e o build ainda dependem da execução do workflow; nenhuma câmera, janela nativa ou transição Preview/Program foi validada neste incremento.
+
+
+## Resolução de DLLs no smoke test Windows
+
+O processo isolado registra os diretórios `bin/64bit` e `obs-plugins/64bit` com `AddDllDirectory`, define `LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` e muda o diretório de trabalho para `bin/64bit` antes de carregar `obs.dll`. Isso permite resolver dependências de módulos carregados posteriormente sem depender do PATH global. Os cookies de diretório são removidos após descarregar a libobs.
