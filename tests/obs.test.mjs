@@ -84,3 +84,18 @@ test("Windows engine workflow pins and executes the OBS 33.0.1 runtime smoke tes
   assert.ok(workflow.includes("OBS-Studio-33.0.1-Windows-x64.zip"));
   assert.ok(workflow.includes("tests/libobs_preview_cut_smoke.ps1"));
 });
+
+test("libobs smoke test exercises independent Preview and Program displays with a synthetic CUT", () => {
+  const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
+  assert.ok(smoke.includes("var infoPreview=new DisplayInfo"));
+  assert.ok(smoke.includes("var infoProgram=new DisplayInfo"));
+  assert.ok(smoke.includes("displayPreview=createDisplay(ref infoPreview,0)"));
+  assert.ok(smoke.includes("displayProgram=createDisplay(ref infoProgram,0)"));
+  assert.ok(smoke.includes("currentProgramSource=previewSource;"));
+  assert.ok(smoke.includes("output(0,previewSource);"));
+  assert.ok(smoke.includes("Preview draw callbacks before/after CUT="));
+  assert.ok(smoke.includes("Program draw callbacks before/after CUT="));
+  assert.ok(smoke.includes("Program luma before/after CUT="));
+  assert.ok(smoke.includes("destroyDisplay(displayProgram)"));
+  assert.ok(smoke.includes("destroyDisplay(displayPreview)"));
+});
