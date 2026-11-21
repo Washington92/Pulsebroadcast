@@ -5,6 +5,7 @@ import { ObsConnectionPanel } from "./components/pulse/ObsConnectionPanel";
 import { WmixEngine, type PipLayout, type WmixSource } from "./engine/WmixEngine";
 import { WmixAudioEngine, type AudioInput } from "./engine/WmixAudioEngine";
 import { LocalProgramOutput } from "./engine/LocalProgramOutput";
+import { LanCameraClient } from "./engine/LanCameraClient";
 
 type ScenePreset = { name: string; layout: PipLayout; overlayName: string | null; baseName?: string | null };
 const PRESETS_KEY = "wmix-scene-presets-v1";
@@ -99,6 +100,10 @@ export default function App() {
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState("");
+  const lanCameras = useRef(new Map<string, LanCameraClient>());
+  const [lanDialogOpen, setLanDialogOpen] = useState(false);
+  const [lanId, setLanId] = useState("cam-01");
+  const [lanToken, setLanToken] = useState("");
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
   const [selectedMicrophone, setSelectedMicrophone] = useState("");
   const [sources, setSources] = useState<WmixSource[]>([]);
@@ -168,14 +173,30 @@ export default function App() {
   const [inputSearch, setInputSearch] = useState("");
   const [programStream, setProgramStream] = useState<MediaStream | null>(null);
   useEffect(() => {
-    engine.onSourcesChanged = () => { setSources(engine.list()); setOverlay(engine.currentOverlay() ?? ""); };
+    engine.onSourcesChanged = () => {
+      const current = engine.list();
+      setSources(current);
+      setOverlay(engine.currentOverlay() ?? "");
+      const active = new Set(current.map(source => source.id));
+      for (const [id, client] of lanCameras.current) {
+        if (!active.has(id)) {
+          client.disconnect();
+          lanCameras.current.delete(id);
+        }
+      }
+    };
     void refreshMicrophones();
     const refreshDevices = () => { void refreshMicrophones(); };
     navigator.mediaDevices?.addEventListener?.("devicechange", refreshDevices);
     engine.setPipLayout(pipLayout);
     audio.onChange = setInputs;
     audio.setMaster(0.78, false);
-    engine.onProgramChanged = setProgram;
+    engine.onProgramChanged = id => {
+      setProgram(id);
+      for (const [sourceId, client] of lanCameras.current) {
+        void client.setTally(sourceId === id ? "PROGRAM" : "STANDBY").catch(() => {});
+      }
+    };
     engine.onPerformance = setPerformanceMetrics;
     engine.onRecordingRecovered = blob => {
       const url = URL.createObjectURL(blob);
@@ -272,6 +293,22 @@ export default function App() {
     setSelectedPreset("");
     setError("");
   }
+  function addLanCamera() {
+    setError("");
+    let client: LanCameraClient | null = null;
+    try {
+      client = LanCameraClient.connect("http://127.0.0.1:8787", lanId.trim(), lanToken);
+      const id = engine.addRemoteCamera(client.stream, "wMix Camera " + lanId.trim());
+      lanCameras.current.set(id, client);
+      setLanDialogOpen(false);
+      setLanToken("");
+      void client.setTally("STANDBY").catch(() => {});
+    } catch (error) {
+      client?.disconnect();
+      setError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function addCamera() {
     setError("");
     try {
@@ -401,15 +438,31 @@ export default function App() {
         <input aria-label="Pesquisar tipos de input" value={inputSearch} onChange={e => setInputSearch(e.target.value)} placeholder="Pesquisar câmera, vídeo, NDI, áudio, navegador..." className="mb-3 w-full rounded-lg border border-border bg-secondary/60 px-3 py-2 text-sm outline-none focus:border-muted-foreground" />
         <div className="overflow-y-auto pr-1">
           {([
-            { title: "Câmeras e captura", items: [{ name: "Câmera USB / Webcam", icon: "◉", desc: "Câmera reconhecida pelo Windows", action: "camera" }, { name: "Captura HDMI / SDI", icon: "▣", desc: "Via placa de captura reconhecida como câmera", action: "camera" }, { name: "Câmera IP / RTSP", icon: "◉", desc: "Protocolo de rede", action: "" }, { name: "NDI / SRT", icon: "⇄", desc: "Vídeo profissional pela rede", action: "" }] },
+            { title: "Câmeras e captura", items: [{ name: "wMix Camera LAN", icon: "◉", desc: "Receber celular via ponte LAN experimental", action: "lan" }, { name: "Câmera USB / Webcam", icon: "◉", desc: "Câmera reconhecida pelo Windows", action: "camera" }, { name: "Captura HDMI / SDI", icon: "▣", desc: "Via placa de captura reconhecida como câmera", action: "camera" }, { name: "Câmera IP / RTSP", icon: "◉", desc: "Protocolo de rede", action: "" }, { name: "NDI / SRT", icon: "⇄", desc: "Vídeo profissional pela rede", action: "" }] },
             { title: "Mídia", items: [{ name: "Imagem", icon: "▧", desc: "PNG, JPG, WebP, GIF estático", action: "image" }, { name: "Vídeo", icon: "▶", desc: "MP4, WebM e codecs compatíveis", action: "video" }, { name: "Áudio / Música", icon: "♫", desc: "Arquivos de áudio", action: "" }, { name: "Playlist / Slideshow", icon: "▤", desc: "Lista de mídias", action: "" }] },
             { title: "Tela e aplicativos", items: [{ name: "Tela / Monitor", icon: "▣", desc: "Compartilhar monitor ou janela", action: "screen" }, { name: "Captura de jogo", icon: "◈", desc: "Captura dedicada de jogos", action: "" }, { name: "Região de tela", icon: "▢", desc: "Área selecionada", action: "" }] },
             { title: "Gráficos e composição", items: [{ name: "Título / Lower third", icon: "T", desc: "Textos e GC", action: "" }, { name: "Navegador / URL", icon: "◎", desc: "Páginas e overlays web", action: "" }, { name: "Cor / Gradiente", icon: "◧", desc: "Fundos gráficos", action: "" }, { name: "Cena / Multiview", icon: "▦", desc: "Composição de múltiplas fontes", action: "" }, { name: "Relógio / Cronômetro", icon: "◷", desc: "Elementos temporizados", action: "" }] },
             { title: "Áudio e produção", items: [{ name: "Microfone", icon: "♩", desc: "Adicionar ao mixer de áudio", action: "microphone" }, { name: "Áudio do sistema", icon: "♫", desc: "Captura de áudio do Windows", action: "" }, { name: "Replay / Entrada remota", icon: "↺", desc: "Produção avançada", action: "" }] },
           ] as const).map(group => {
             const visible = group.items.filter(item => (group.title + " " + item.name + " " + item.desc).toLocaleLowerCase("pt-BR").includes(inputSearch.toLocaleLowerCase("pt-BR").trim()));
-            return visible.length ? <div key={group.title} className="mb-4"><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h3><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{visible.map(item => <button key={item.name} type="button" disabled={!item.action} onClick={() => { if (item.action === "image") imageFile.current?.click(); else if (item.action === "video") videoFile.current?.click(); else if (item.action === "camera") { setShowInputPicker(false); void addCamera(); } else if (item.action === "screen") { setShowInputPicker(false); void addScreen(); } else if (item.action === "microphone") { setShowInputPicker(false); void addMicrophone(); } }} className="min-h-24 rounded-lg border border-border bg-secondary/50 p-3 text-left transition-colors enabled:hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-45"><span className="mb-1 block text-lg text-muted-foreground">{item.icon}</span><strong className="block text-xs">{item.name}</strong><span className="block text-[10px] text-muted-foreground">{item.desc}</span>{!item.action && <span className="mt-1 block text-[9px]">Em desenvolvimento</span>}</button>)}</div></div> : null;
+            return visible.length ? <div key={group.title} className="mb-4"><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h3><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{visible.map(item => <button key={item.name} type="button" disabled={!item.action} onClick={() => { if (item.action === "image") imageFile.current?.click(); else if (item.action === "video") videoFile.current?.click(); else if (item.action === "camera") { setShowInputPicker(false); void addCamera(); } else if (item.action === "lan") { setShowInputPicker(false); setLanDialogOpen(true); } else if (item.action === "screen") { setShowInputPicker(false); void addScreen(); } else if (item.action === "microphone") { setShowInputPicker(false); void addMicrophone(); } }} className="min-h-24 rounded-lg border border-border bg-secondary/50 p-3 text-left transition-colors enabled:hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-45"><span className="mb-1 block text-lg text-muted-foreground">{item.icon}</span><strong className="block text-xs">{item.name}</strong><span className="block text-[10px] text-muted-foreground">{item.desc}</span>{!item.action && <span className="mt-1 block text-[9px]">Em desenvolvimento</span>}</button>)}</div></div> : null;
           })}
+        </div>
+      </section>
+    </div>}
+    {lanDialogOpen && <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/75 p-4">
+      <section role="dialog" aria-modal="true" aria-label="Adicionar wMix Camera LAN" className="w-full max-w-md space-y-3 rounded-xl border border-border bg-card p-5 text-foreground">
+        <h2 className="text-base font-semibold">wMix Camera • teste LAN</h2>
+        <p className="text-xs text-muted-foreground">Inicie tools/wmix-camera-bridge.mjs no Windows. Recepção JPEG experimental ~2 fps, sem áudio nem TLS. Use somente na rede local.</p>
+        <label className="block text-xs">ID da câmera
+          <input className="mt-1 w-full rounded border border-border bg-background p-2" value={lanId} onChange={e => setLanId(e.target.value)} />
+        </label>
+        <label className="block text-xs">Token da ponte
+          <input type="password" autoComplete="off" className="mt-1 w-full rounded border border-border bg-background p-2" value={lanToken} onChange={e => setLanToken(e.target.value)} />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="rounded border border-border px-3 py-2 text-xs" onClick={() => { setLanDialogOpen(false); setLanToken(""); }}>Cancelar</button>
+          <button type="button" className="rounded bg-primary px-3 py-2 text-xs text-primary-foreground" onClick={addLanCamera}>Adicionar fonte LAN</button>
         </div>
       </section>
     </div>}

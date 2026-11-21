@@ -128,6 +128,25 @@ export class WmixEngine {
     if (resolvedDeviceId) this.cameraDeviceIds.set(id, resolvedDeviceId);
     return id;
   }
+  /**
+   * Register a remotely received MediaStream as a camera input.
+   * The stream must come from a trusted receiver/signaling adapter; this method
+   * does not establish transport, open ports, or authenticate mobile devices.
+   * It joins the existing video/Preview/Program pipeline without changing it.
+   */
+  addRemoteCamera(stream: MediaStream, cameraName: string): string {
+    if (!stream.active || stream.getVideoTracks().length === 0) {
+      throw new Error("A câmera remota não possui vídeo ativo.");
+    }
+    const name = cameraName.trim();
+    if (!name || name.length > 60) {
+      throw new Error("Informe um nome de câmera entre 1 e 60 caracteres.");
+    }
+    const id = this.addStream(stream, name, "camera");
+    this.renameSource(id, name);
+    return id;
+  }
+
   /** Refresh a camera stream without changing its scene/source ID. */
   async reconnectCamera(id: string, deviceId?: string) {
     const source = this.sources.get(id);
