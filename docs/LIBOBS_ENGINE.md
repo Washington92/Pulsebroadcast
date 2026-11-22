@@ -53,8 +53,9 @@ Critérios de aceite do primeiro pipeline audiovisual:
 `tests/libobs_preview_cut_smoke.ps1` foi ajustado para o contrato do OBS 33.0.1:
 
 - `obs_video_info.graphics_module` usa `libobs-d3d11`, não o caminho do DLL.
-- Configura áudio estéreo a 48 kHz e carrega os módulos oficiais de OBS 33.0.1 com `obs_load_core_modules()` seguido de `obs_post_load_modules()`. A rotina depreciada `obs_load_all_modules()` é vazia nessa versão e não deve ser usada.
-- Mantém o diretório de trabalho em `bin/64bit`, pois o loader core resolve os módulos em `../../core/<module>/<module>.dll` e os dados em `../../core/<module>/data`. A fonte sintética `color_source_v3` é fornecida pelo módulo core `image-source`.
+- Configura áudio estéreo a 48 kHz e carrega somente o módulo core necessário ao teste, `image-source`, por `obs_load_plugins()` com `OBS_MODULE_TYPE_CORE`, seguido de `obs_post_load_modules()`. A rotina depreciada `obs_load_all_modules()` é vazia em OBS 33.0.1.
+- Evita `obs_load_core_modules()` no probe headless: esse carregador tenta inicializar também módulos de frontend e hardware opcionais. O teste carrega apenas `core/image-source/image-source.dll`, verifica o contador de falhas e depois confirma o registro da fonte ao criar `color_source_v3`.
+- Mantém o diretório de trabalho em `bin/64bit`, pois o caminho do módulo core é relativo a esse diretório: `../../core/<module>/<module>.dll`, com dados em `../../core/<module>/data`.
 - Usa a assinatura oficial do OBS 33.0.1 `obs_display_create(gs_init_data*, uint32_t background_color)`; a cor inicial é passada na criação e pode ser atualizada depois por `obs_display_set_background_color()`.
 - Mantém o estado de exibição da fonte com `obs_source_inc_showing()`/`obs_source_dec_showing()`.
 

@@ -42,7 +42,11 @@ public static class ObsDisplayProbe {
  }
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] [return:MarshalAs(UnmanagedType.I1)] delegate bool ResetAudio(ref Audio audio);
  [StructLayout(LayoutKind.Sequential)] struct Audio { public uint samplesPerSec; public int speakers; }
- [UnmanagedFunctionPointer(CallingConvention.Cdecl)] [return:MarshalAs(UnmanagedType.I1)] delegate bool LoadCoreModules();
+ [StructLayout(LayoutKind.Sequential)] struct RuntimeModulePath { public IntPtr binary,data; }
+ [StructLayout(LayoutKind.Sequential)] struct RuntimeModuleInfo { public RuntimeModulePath path_info; public int type; public IntPtr name; }
+ [StructLayout(LayoutKind.Sequential)] struct ModuleFailureInfo { public IntPtr failed_modules; public UIntPtr count; }
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void LoadPlugins(ref RuntimeModuleInfo info,ref ModuleFailureInfo error);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void ModuleFailureInfoFree(ref ModuleFailureInfo error);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void PostLoadModules();
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr Create(string id,string name,IntPtr settings,IntPtr hotkeys);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr DataCreate();
@@ -94,11 +98,30 @@ public static class ObsDisplayProbe {
  if(rc!=0)throw new Exception("Video reset failed");
  var audio=new Audio{samplesPerSec=48000,speakers=2}; // SPEAKERS_STEREO
  if(!Get<ResetAudio>(h,"obs_reset_audio")(ref audio)) throw new Exception("Audio reset failed");
- // OBS 33.0.1 moved first-party modules to the core loader. The deprecated
- // obs_load_all_modules export is a no-op in this release.
- if(!Get<LoadCoreModules>(h,"obs_load_core_modules")())
-     throw new Exception("obs_load_core_modules failed; verify the OBS core module package");
- Get<PostLoadModules>(h,"obs_post_load_modules")();
+ // Load only image-source as a CORE module. Loading every core module also
+ // initializes frontend and optional hardware modules that a headless probe does not host.
+ var moduleBinary=Marshal.StringToCoTaskMemUTF8(Path.Combine(root,"core","image-source"));
+ var moduleData=Marshal.StringToCoTaskMemUTF8(Path.Combine(root,"core","image-source","data"));
+ try {
+   var moduleInfo=new RuntimeModuleInfo{
+     path_info=new RuntimeModulePath{binary=moduleBinary,data=moduleData},
+     type=1, // OBS_MODULE_TYPE_CORE
+     name=IntPtr.Zero
+   };
+   var failures=new ModuleFailureInfo{failed_modules=IntPtr.Zero,count=UIntPtr.Zero};
+   var loadPlugins=Get<LoadPlugins>(h,"obs_load_plugins");
+   var freeFailures=Get<ModuleFailureInfoFree>(h,"obs_module_failure_info_free");
+   try {
+     loadPlugins(ref moduleInfo,ref failures);
+     if(failures.count.ToUInt64()!=0)
+       throw new Exception("image-source core module load failures: "+failures.count.ToUInt64());
+   } finally { freeFailures(ref failures); }
+   Get<PostLoadModules>(h,"obs_post_load_modules")();
+   Console.WriteLine("Loaded OBS core module: image-source");
+ } finally {
+   Marshal.FreeCoTaskMem(moduleData);
+   Marshal.FreeCoTaskMem(moduleBinary);
+ }
  var dataCreate=Get<DataCreate>(h,"obs_data_create");
  var dataSetInt=Get<DataSetInt>(h,"obs_data_set_int");
  var dataRelease=Get<DataRelease>(h,"obs_data_release");
