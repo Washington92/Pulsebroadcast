@@ -42,8 +42,8 @@ public static class ObsDisplayProbe {
  }
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] [return:MarshalAs(UnmanagedType.I1)] delegate bool ResetAudio(ref Audio audio);
  [StructLayout(LayoutKind.Sequential)] struct Audio { public uint samplesPerSec; public int speakers; }
- [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void AddModulePath(string binary,string data);
- [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void LoadModules();
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] [return:MarshalAs(UnmanagedType.I1)] delegate bool LoadCoreModules();
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void PostLoadModules();
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr Create(string id,string name,IntPtr settings,IntPtr hotkeys);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr DataCreate();
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void DataSetInt(IntPtr data,string name,long value);
@@ -67,19 +67,15 @@ public static class ObsDisplayProbe {
  static T Get<T>(IntPtr h,string n) where T:Delegate => Marshal.GetDelegateForFunctionPointer<T>(GetProcAddress(h,n));
  public static void Run(string root){
  string bin=Path.Combine(root,"bin","64bit");
- string pluginBin=Path.Combine(root,"obs-plugins","64bit");
- if(!Directory.Exists(bin)||!Directory.Exists(pluginBin))
-     throw new Exception("OBS binary or plugin directory is missing");
+ string coreImageSource=Path.Combine(root,"core","image-source","image-source.dll");
+ string graphicsDll=Path.Combine(bin,"libobs-d3d11.dll");
+ if(!Directory.Exists(bin)||!File.Exists(graphicsDll)||!File.Exists(coreImageSource))
+     throw new Exception("OBS 33.0.1 runtime layout is incomplete. bin="+bin+"; D3D11="+graphicsDll+"; image-source="+coreImageSource);
  if(!SetDefaultDllDirectories(0x1000))
      throw new Exception("SetDefaultDllDirectories failed: "+Marshal.GetLastWin32Error());
  IntPtr binCookie=AddDllDirectory(bin);
  if(binCookie==IntPtr.Zero)
      throw new Exception("AddDllDirectory(bin) failed: "+Marshal.GetLastWin32Error());
- IntPtr pluginCookie=AddDllDirectory(pluginBin);
- if(pluginCookie==IntPtr.Zero) {
-     RemoveDllDirectory(binCookie);
-     throw new Exception("AddDllDirectory(pluginBin) failed: "+Marshal.GetLastWin32Error());
- }
  try {
  if(!SetCurrentDirectoryW(bin))
      throw new Exception("SetCurrentDirectoryW failed: "+Marshal.GetLastWin32Error());
@@ -98,12 +94,11 @@ public static class ObsDisplayProbe {
  if(rc!=0)throw new Exception("Video reset failed");
  var audio=new Audio{samplesPerSec=48000,speakers=2}; // SPEAKERS_STEREO
  if(!Get<ResetAudio>(h,"obs_reset_audio")(ref audio)) throw new Exception("Audio reset failed");
- string pluginData=Path.Combine(root,"data","obs-plugins","%module%");
- if(!Directory.Exists(pluginBin)||!Directory.Exists(root+@"\data\obs-plugins"))
-     throw new Exception("OBS plugin directories are missing");
- Get<AddModulePath>(h,"obs_add_module_path")(pluginBin,pluginData);
- Get<LoadModules>(h,"obs_load_all_modules")();
- Get<LoadModules>(h,"obs_post_load_modules")();
+ // OBS 33.0.1 moved first-party modules to the core loader. The deprecated
+ // obs_load_all_modules export is a no-op in this release.
+ if(!Get<LoadCoreModules>(h,"obs_load_core_modules")())
+     throw new Exception("obs_load_core_modules failed; verify the OBS core module package");
+ Get<PostLoadModules>(h,"obs_post_load_modules")();
  var dataCreate=Get<DataCreate>(h,"obs_data_create");
  var dataSetInt=Get<DataSetInt>(h,"obs_data_set_int");
  var dataRelease=Get<DataRelease>(h,"obs_data_release");
@@ -225,7 +220,6 @@ public static class ObsDisplayProbe {
  }finally{Get<Stop>(h,"obs_shutdown")();}
  }finally{FreeLibrary(h);}
  } finally {
-     RemoveDllDirectory(pluginCookie);
      RemoveDllDirectory(binCookie);
  }
  }

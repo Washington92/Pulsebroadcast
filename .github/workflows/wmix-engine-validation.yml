@@ -104,8 +104,19 @@ jobs:
             Select-Object -First 1
           if (-not $dll) { throw "OBS 33.0.1 x64 package did not contain bin/64bit/obs.dll" }
           $obsRoot = $dll.Directory.Parent.Parent.FullName
+          $d3d11 = Join-Path $dll.Directory.FullName 'libobs-d3d11.dll'
+          $imageSource = Join-Path $obsRoot 'core\image-source\image-source.dll'
+          if (-not (Test-Path -LiteralPath $d3d11 -PathType Leaf)) {
+            throw "OBS D3D11 graphics module missing: $d3d11"
+          }
+          if (-not (Test-Path -LiteralPath $imageSource -PathType Leaf)) {
+            $rootDirs = Get-ChildItem -LiteralPath $obsRoot -Directory | Select-Object -ExpandProperty Name
+            throw "OBS 33 core image-source module missing: $imageSource; root directories: $($rootDirs -join ', ')"
+          }
           "OBS_ROOT=$obsRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "OBS root: $obsRoot"
+          Write-Host "OBS D3D11: $d3d11"
+          Write-Host "OBS core image-source: $imageSource"
           Write-Host "OBS ProductVersion: $((Get-Item -LiteralPath $dll.FullName).VersionInfo.ProductVersion)"
       - name: Run libobs 33.0.1 D3D11, audio, module and display smoke test
         shell: pwsh

@@ -53,7 +53,8 @@ Critérios de aceite do primeiro pipeline audiovisual:
 `tests/libobs_preview_cut_smoke.ps1` foi ajustado para o contrato do OBS 33.0.1:
 
 - `obs_video_info.graphics_module` usa `libobs-d3d11`, não o caminho do DLL.
-- Configura áudio estéreo a 48 kHz e carrega os módulos pelos diretórios `obs-plugins/64bit` e `data/obs-plugins/%module%`.
+- Configura áudio estéreo a 48 kHz e carrega os módulos oficiais de OBS 33.0.1 com `obs_load_core_modules()` seguido de `obs_post_load_modules()`. A rotina depreciada `obs_load_all_modules()` é vazia nessa versão e não deve ser usada.
+- Mantém o diretório de trabalho em `bin/64bit`, pois o loader core resolve os módulos em `../../core/<module>/<module>.dll` e os dados em `../../core/<module>/data`. A fonte sintética `color_source_v3` é fornecida pelo módulo core `image-source`.
 - Usa a assinatura oficial do OBS 33.0.1 `obs_display_create(gs_init_data*, uint32_t background_color)`; a cor inicial é passada na criação e pode ser atualizada depois por `obs_display_set_background_color()`.
 - Mantém o estado de exibição da fonte com `obs_source_inc_showing()`/`obs_source_dec_showing()`.
 
@@ -70,4 +71,4 @@ A correção do identificador D3D11 reduz uma incompatibilidade com o contrato d
 
 ## Resolução de DLLs no smoke test Windows
 
-O processo isolado registra os diretórios `bin/64bit` e `obs-plugins/64bit` com `AddDllDirectory`, define `LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` e muda o diretório de trabalho para `bin/64bit` antes de carregar `obs.dll`. Isso permite resolver dependências de módulos carregados posteriormente sem depender do PATH global. Os cookies de diretório são removidos após descarregar a libobs.
+O processo isolado registra `bin/64bit` com `AddDllDirectory`, define `LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` e muda o diretório de trabalho para `bin/64bit` antes de carregar `obs.dll`. Em OBS 33.0.1, os módulos oficiais são carregados pelo loader core a partir de `core/<module>/<module>.dll`; o carregador nativo usa `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` para resolver dependências junto ao módulo. O caminho legado `obs-plugins/64bit` não é requisito para o pacote portátil 33.0.1. O cookie de `bin/64bit` é removido ao final do teste.

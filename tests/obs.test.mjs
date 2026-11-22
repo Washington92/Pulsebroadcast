@@ -63,19 +63,31 @@ test("OBS rejects URL credentials and rejects outstanding requests on disconnect
 });
 
 
-test("OBS 33.0.1 display interop passes the required background-color argument", () => {
+test("OBS 33.0.1 display interop passes the background color to both independent displays", () => {
   const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
   assert.ok(smoke.includes("delegate IntPtr DisplayCreate(ref DisplayInfo data,uint backgroundColor);"));
-  assert.ok(smoke.includes('Get<DisplayCreate>(h,"obs_display_create")(ref info,0)'));
+  assert.ok(smoke.includes("displayPreview=createDisplay(ref infoPreview,0);"));
+  assert.ok(smoke.includes("displayProgram=createDisplay(ref infoProgram,0);"));
 });
 
-test("libobs smoke test registers OBS binary and plugin DLL search directories", () => {
+test("OBS 33.0.1 loads core modules through the supported loader", () => {
+  const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
+  assert.ok(smoke.includes("delegate bool LoadCoreModules();"));
+  assert.ok(smoke.includes('Get<LoadCoreModules>(h,"obs_load_core_modules")()'));
+  assert.ok(smoke.includes('Get<PostLoadModules>(h,"obs_post_load_modules")()'));
+  assert.ok(smoke.includes('Path.Combine(root,"core","image-source","image-source.dll")'));
+  assert.ok(!smoke.includes('"obs_load_all_modules"'));
+  assert.ok(!smoke.includes('"obs_add_module_path"'));
+});
+
+test("libobs smoke test registers the OBS binary DLL path and resolves the core layout", () => {
   const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
   assert.ok(smoke.includes("SetDefaultDllDirectories(0x1000)"));
   assert.ok(smoke.includes("AddDllDirectory(bin)"));
-  assert.ok(smoke.includes("AddDllDirectory(pluginBin)"));
   assert.ok(smoke.includes("SetCurrentDirectoryW(bin)"));
-  assert.ok(smoke.includes("RemoveDllDirectory(pluginCookie)"));
+  assert.ok(smoke.includes("RemoveDllDirectory(binCookie)"));
+  assert.ok(smoke.includes('Path.Combine(root,"core","image-source","image-source.dll")'));
+  assert.ok(!smoke.includes("obs-plugins"));
 });
 
 test("Windows engine workflow pins and executes the OBS 33.0.1 runtime smoke test", () => {
