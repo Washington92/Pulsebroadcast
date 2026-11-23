@@ -73,3 +73,12 @@ A correção do identificador D3D11 reduz uma incompatibilidade com o contrato d
 ## Resolução de DLLs no smoke test Windows
 
 O processo isolado registra `bin/64bit` com `AddDllDirectory`, define `LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` e muda o diretório de trabalho para `bin/64bit` antes de carregar `obs.dll`. Em OBS 33.0.1, os módulos oficiais são carregados pelo loader core a partir de `core/<module>/<module>.dll`; o carregador nativo usa `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` para resolver dependências junto ao módulo. O caminho legado `obs-plugins/64bit` não é requisito para o pacote portátil 33.0.1. O cookie de `bin/64bit` é removido ao final do teste.
+
+
+## DirectShow module smoke test (OBS 33.0.1)
+
+The Windows engine workflow also verifies the official core module at `core/win-dshow/win-dshow.dll`. The isolated probe loads `image-source` and `win-dshow` as core modules with `obs_load_plugins()`, then creates a non-visible `dshow_input` source and inspects its `video_device_id` property list.
+
+The probe logs each DirectShow device name and identifier returned by the module. A count of zero is accepted on hosted CI runners without physical capture hardware; in that case the test proves module loading, source registration, and availability of the device property, **not** camera capture or frame delivery. A physical webcam test on Windows 10/11 remains mandatory before claiming camera integration.
+
+The test destroys the properties object and releases the temporary source before `obs_shutdown()`. It does not mark the source as showing or start a capture stream.
