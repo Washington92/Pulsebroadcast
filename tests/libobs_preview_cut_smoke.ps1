@@ -49,6 +49,12 @@ public static class ObsDisplayProbe {
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void ModuleFailureInfoFree(ref ModuleFailureInfo error);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void PostLoadModules();
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr Create(string id,string name,IntPtr settings,IntPtr hotkeys);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr SourceProperties(IntPtr source);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr PropertiesGet(IntPtr properties,string name);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void PropertiesDestroy(IntPtr properties);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate UIntPtr PropertyListItemCount(IntPtr property);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr PropertyListItemName(IntPtr property,UIntPtr index);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr PropertyListItemString(IntPtr property,UIntPtr index);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr DataCreate();
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void DataSetInt(IntPtr data,string name,long value);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void DataRelease(IntPtr data);
@@ -72,9 +78,10 @@ public static class ObsDisplayProbe {
  public static void Run(string root){
  string bin=Path.Combine(root,"bin","64bit");
  string coreImageSource=Path.Combine(root,"core","image-source","image-source.dll");
+ string dshowModule=Path.Combine(root,"core","win-dshow","win-dshow.dll");
  string graphicsDll=Path.Combine(bin,"libobs-d3d11.dll");
- if(!Directory.Exists(bin)||!File.Exists(graphicsDll)||!File.Exists(coreImageSource))
-     throw new Exception("OBS 33.0.1 runtime layout is incomplete. bin="+bin+"; D3D11="+graphicsDll+"; image-source="+coreImageSource);
+ if(!Directory.Exists(bin)||!File.Exists(graphicsDll)||!File.Exists(coreImageSource)||!File.Exists(dshowModule))
+     throw new Exception("OBS 33.0.1 runtime layout is incomplete. bin="+bin+"; D3D11="+graphicsDll+"; image-source="+coreImageSource+"; win-dshow="+dshowModule);
  if(!SetDefaultDllDirectories(0x1000))
      throw new Exception("SetDefaultDllDirectories failed: "+Marshal.GetLastWin32Error());
  IntPtr binCookie=AddDllDirectory(bin);
@@ -98,34 +105,44 @@ public static class ObsDisplayProbe {
  if(rc!=0)throw new Exception("Video reset failed");
  var audio=new Audio{samplesPerSec=48000,speakers=2}; // SPEAKERS_STEREO
  if(!Get<ResetAudio>(h,"obs_reset_audio")(ref audio)) throw new Exception("Audio reset failed");
- // Load only image-source as a CORE module. Loading every core module also
- // initializes frontend and optional hardware modules that a headless probe does not host.
- var moduleBinary=Marshal.StringToCoTaskMemUTF8(Path.Combine(root,"core","image-source"));
- var moduleData=Marshal.StringToCoTaskMemUTF8(Path.Combine(root,"core","image-source","data"));
- try {
-   var moduleInfo=new RuntimeModuleInfo{
-     path_info=new RuntimeModulePath{binary=moduleBinary,data=moduleData},
-     type=1, // OBS_MODULE_TYPE_CORE
-     name=IntPtr.Zero
-   };
-   var failures=new ModuleFailureInfo{failed_modules=IntPtr.Zero,count=UIntPtr.Zero};
-   var loadPlugins=Get<LoadPlugins>(h,"obs_load_plugins");
-   var freeFailures=Get<ModuleFailureInfoFree>(h,"obs_module_failure_info_free");
+ // Load only the core modules required by this probe. The full core loader also
+ // initializes frontend and optional hardware modules that a headless process does not host.
+ void LoadCoreModule(string moduleName) {
+   var moduleBinary=Marshal.StringToCoTaskMemUTF8(Path.Combine(root,"core",moduleName));
+   var moduleData=Marshal.StringToCoTaskMemUTF8(Path.Combine(root,"core",moduleName,"data"));
    try {
-     loadPlugins(ref moduleInfo,ref failures);
-     if(failures.count.ToUInt64()!=0)
-       throw new Exception("image-source core module load failures: "+failures.count.ToUInt64());
-   } finally { freeFailures(ref failures); }
-   Get<PostLoadModules>(h,"obs_post_load_modules")();
-   Console.WriteLine("Loaded OBS core module: image-source");
- } finally {
-   Marshal.FreeCoTaskMem(moduleData);
-   Marshal.FreeCoTaskMem(moduleBinary);
+     var moduleInfo=new RuntimeModuleInfo{
+       path_info=new RuntimeModulePath{binary=moduleBinary,data=moduleData},
+       type=1, // OBS_MODULE_TYPE_CORE
+       name=IntPtr.Zero
+     };
+     var failures=new ModuleFailureInfo{failed_modules=IntPtr.Zero,count=UIntPtr.Zero};
+     var loadPlugins=Get<LoadPlugins>(h,"obs_load_plugins");
+     var freeFailures=Get<ModuleFailureInfoFree>(h,"obs_module_failure_info_free");
+     try {
+       loadPlugins(ref moduleInfo,ref failures);
+       if(failures.count.ToUInt64()!=0)
+         throw new Exception(moduleName+" core module load failures: "+failures.count.ToUInt64());
+     } finally { freeFailures(ref failures); }
+     Console.WriteLine("Loaded OBS core module: "+moduleName);
+   } finally {
+     Marshal.FreeCoTaskMem(moduleData);
+     Marshal.FreeCoTaskMem(moduleBinary);
+   }
  }
+ LoadCoreModule("image-source");
+ LoadCoreModule("win-dshow");
+ Get<PostLoadModules>(h,"obs_post_load_modules")();
  var dataCreate=Get<DataCreate>(h,"obs_data_create");
  var dataSetInt=Get<DataSetInt>(h,"obs_data_set_int");
  var dataRelease=Get<DataRelease>(h,"obs_data_release");
  var sourceCreate=Get<Create>(h,"obs_source_create");
+ var sourceProperties=Get<SourceProperties>(h,"obs_source_properties");
+ var propertiesGet=Get<PropertiesGet>(h,"obs_properties_get");
+ var propertiesDestroy=Get<PropertiesDestroy>(h,"obs_properties_destroy");
+ var propertyListItemCount=Get<PropertyListItemCount>(h,"obs_property_list_item_count");
+ var propertyListItemName=Get<PropertyListItemName>(h,"obs_property_list_item_name");
+ var propertyListItemString=Get<PropertyListItemString>(h,"obs_property_list_item_string");
  IntPtr CreateColorSource(string name,long color) {
    var settings=dataCreate();
    if(settings==IntPtr.Zero) throw new Exception("obs_data_create failed");
@@ -138,6 +155,8 @@ public static class ObsDisplayProbe {
      return created;
    } finally { dataRelease(settings); }
  }
+ IntPtr dshowSource=IntPtr.Zero;
+ IntPtr dshowProperties=IntPtr.Zero;
  IntPtr programSource=IntPtr.Zero;
  IntPtr previewSource=IntPtr.Zero;
  IntPtr hwndPreview=IntPtr.Zero;
@@ -157,6 +176,28 @@ public static class ObsDisplayProbe {
  var addDraw=Get<RegisterDraw>(h,"obs_display_add_draw_callback");
  var removeDraw=Get<RegisterDraw>(h,"obs_display_remove_draw_callback");
  try {
+   // Register DirectShow and inspect its device property list without activating capture.
+   // A hosted CI runner may expose zero physical cameras; source registration is still testable.
+   var dshowSettings=dataCreate();
+   if(dshowSettings==IntPtr.Zero) throw new Exception("obs_data_create failed for DirectShow settings");
+   try {
+     dshowSource=sourceCreate("dshow_input","wMix DirectShow probe",dshowSettings,IntPtr.Zero);
+   } finally { dataRelease(dshowSettings); }
+   if(dshowSource==IntPtr.Zero) throw new Exception("dshow_input source is unavailable; win-dshow module did not register");
+   dshowProperties=sourceProperties(dshowSource);
+   if(dshowProperties==IntPtr.Zero) throw new Exception("obs_source_properties returned null for dshow_input");
+   var devices=propertiesGet(dshowProperties,"video_device_id");
+   if(devices==IntPtr.Zero) throw new Exception("dshow_input video_device_id property is missing");
+   ulong deviceCount=propertyListItemCount(devices).ToUInt64();
+   Console.WriteLine("DirectShow video_device_id entries="+deviceCount);
+   for(ulong i=0;i<deviceCount;i++) {
+     var name=Marshal.PtrToStringUTF8(propertyListItemName(devices,new UIntPtr(i))) ?? "";
+     var id=Marshal.PtrToStringUTF8(propertyListItemString(devices,new UIntPtr(i))) ?? "";
+     Console.WriteLine("  DirectShow "+(i+1)+": "+name+" | "+id);
+   }
+   if(deviceCount==0)
+     Console.WriteLine("No DirectShow cameras exposed by runner; plugin/source registration still validated.");
+
    // White is the initial Program output; black is the Preview source.
    programSource=CreateColorSource("wMix Program Test",unchecked((long)0xFFFFFFFFu));
    previewSource=CreateColorSource("wMix Preview Test",unchecked((long)0xFF000000u));
@@ -233,6 +274,8 @@ public static class ObsDisplayProbe {
    if(hwndPreview!=IntPtr.Zero) DestroyWindow(hwndPreview);
    if(previewShowing) decShowing(previewSource);
    if(programShowing) decShowing(programSource);
+   if(dshowProperties!=IntPtr.Zero) propertiesDestroy(dshowProperties);
+   if(dshowSource!=IntPtr.Zero) releaseSource(dshowSource);
    if(previewSource!=IntPtr.Zero) releaseSource(previewSource);
    if(programSource!=IntPtr.Zero) releaseSource(programSource);
  }
