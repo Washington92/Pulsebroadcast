@@ -82,6 +82,16 @@ test("OBS 33.0.1 loads only the required image-source core module", () => {
   assert.ok(!smoke.includes('"obs_load_core_modules"'));
 });
 
+test("OBS 33.0.1 loads win-dshow and inspects DirectShow device properties", () => {
+  const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
+  assert.ok(smoke.includes('Path.Combine(root,"core","win-dshow","win-dshow.dll")'));
+  assert.ok(smoke.includes('LoadCoreModule("win-dshow")'));
+  assert.ok(smoke.includes('sourceCreate("dshow_input","wMix DirectShow probe"'));
+  assert.ok(smoke.includes('propertiesGet(dshowProperties,"video_device_id")'));
+  assert.ok(smoke.includes("DirectShow video_device_id entries="));
+  assert.ok(smoke.includes("No DirectShow cameras exposed by runner; plugin/source registration still validated."));
+});
+
 test("libobs smoke test registers the OBS binary DLL path and resolves the core layout", () => {
   const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
   assert.ok(smoke.includes("SetDefaultDllDirectories(0x1000)"));
@@ -97,6 +107,8 @@ test("Windows engine workflow pins and executes the OBS 33.0.1 runtime smoke tes
   assert.ok(workflow.includes("libobs-runtime-smoke"));
   assert.ok(workflow.includes("OBS-Studio-33.0.1-Windows-x64.zip"));
   assert.ok(workflow.includes("tests/libobs_preview_cut_smoke.ps1"));
+  assert.ok(workflow.includes("core\\win-dshow\\win-dshow.dll"));
+  assert.ok(workflow.includes("DirectShow"));
 });
 
 test("libobs smoke test exercises independent Preview and Program displays with a synthetic CUT", () => {
