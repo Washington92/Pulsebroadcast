@@ -312,11 +312,14 @@ public static class ObsDisplayProbe {
      if(cameraWidth==0||cameraHeight==0||previewBeforeCameraCut==0)
        throw new Exception("DirectShow camera did not produce a usable source for Preview.");
 
+     int programBeforeCameraCut=Volatile.Read(ref programDraws);
      int cameraFrames=0;
      Frame cameraCallback=(state,video)=> {
        if(video!=IntPtr.Zero && Marshal.ReadIntPtr(video)!=IntPtr.Zero)
          Interlocked.Increment(ref cameraFrames);
      };
+     // Clear the synthetic Program output before subscribing, so only camera frames can count.
+     output(0,IntPtr.Zero);
      connect(IntPtr.Zero,cameraCallback,IntPtr.Zero);
      try {
        // CUT: move the same live DirectShow source from Preview to Program.
@@ -332,7 +335,7 @@ public static class ObsDisplayProbe {
        bool programUsesCamera=activeProgram==dshowSource;
        if(activeProgram!=IntPtr.Zero) releaseSource(activeProgram);
        Console.WriteLine("DirectShow Program CUT: frames="+captured+"; Preview draws="+previewAfterCut+"; Program draws="+programAfterCut+"; output-source-match="+programUsesCamera);
-       if(captured==0||!programUsesCamera||previewAfterCut<=previewBeforeCameraCut||programAfterCut==0)
+       if(captured==0||!programUsesCamera||previewAfterCut<=previewBeforeCameraCut||programAfterCut<=programBeforeCameraCut)
          throw new Exception("DirectShow Preview-to-Program CUT failed: camera frames or Program source were not confirmed.");
      } finally {
        output(0,IntPtr.Zero);
