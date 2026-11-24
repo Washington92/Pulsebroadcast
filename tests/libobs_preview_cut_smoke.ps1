@@ -61,6 +61,8 @@ public static class ObsDisplayProbe {
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void DataSetString(IntPtr data,IntPtr name,IntPtr value);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr SourceGetSettings(IntPtr source);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void SourceUpdate(IntPtr source,IntPtr settings);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate uint SourceDimension(IntPtr source);
+ [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr SourceGetOutput(uint channel);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void DataRelease(IntPtr data);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void Output(uint channel,IntPtr source);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void Release(IntPtr source);
@@ -178,6 +180,8 @@ public static class ObsDisplayProbe {
  IntPtr displayProgram=IntPtr.Zero;
  bool programShowing=false;
  bool previewShowing=false;
+ bool cameraPreviewShowing=false;
+ bool cameraProgramShowing=false;
  Draw previewDraw=null;
  Draw programDraw=null;
  bool previewDrawAdded=false;
@@ -242,8 +246,9 @@ public static class ObsDisplayProbe {
    var render=Get<Release>(h,"obs_source_video_render");
    int previewDraws=0;
    int programDraws=0;
+   IntPtr currentPreviewSource=previewSource;
    IntPtr currentProgramSource=programSource;
-   previewDraw=(param,w,h2)=>{render(previewSource);Interlocked.Increment(ref previewDraws);};
+   previewDraw=(param,w,h2)=>{render(currentPreviewSource);Interlocked.Increment(ref previewDraws);};
    programDraw=(param,w,h2)=>{render(currentProgramSource);Interlocked.Increment(ref programDraws);};
    addDraw(displayPreview,previewDraw,IntPtr.Zero); previewDrawAdded=true;
    addDraw(displayProgram,programDraw,IntPtr.Zero); programDrawAdded=true;
@@ -291,23 +296,46 @@ public static class ObsDisplayProbe {
        sourceUpdate(dshowSource,captureSettings);
      } finally { dataRelease(captureSettings); }
 
+     // Put the real camera in Preview first; Program remains on the white test source.
+     if(previewShowing) { decShowing(previewSource); previewShowing=false; }
+     currentPreviewSource=dshowSource;
+     incShowing(dshowSource); cameraPreviewShowing=true;
+     currentProgramSource=programSource;
+     output(0,programSource);
+     Thread.Sleep(2000);
+     var getWidth=Get<SourceDimension>(h,"obs_source_get_width");
+     var getHeight=Get<SourceDimension>(h,"obs_source_get_height");
+     uint cameraWidth=getWidth(dshowSource);
+     uint cameraHeight=getHeight(dshowSource);
+     int previewBeforeCameraCut=Volatile.Read(ref previewDraws);
+     Console.WriteLine("DirectShow Preview source="+cameraWidth+"x"+cameraHeight+"; draw callbacks="+previewBeforeCameraCut);
+     if(cameraWidth==0||cameraHeight==0||previewBeforeCameraCut==0)
+       throw new Exception("DirectShow camera did not produce a usable source for Preview.");
+
      int cameraFrames=0;
      Frame cameraCallback=(state,video)=> {
        if(video!=IntPtr.Zero && Marshal.ReadIntPtr(video)!=IntPtr.Zero)
          Interlocked.Increment(ref cameraFrames);
      };
      connect(IntPtr.Zero,cameraCallback,IntPtr.Zero);
-     bool cameraShowing=false;
      try {
-       incShowing(dshowSource); cameraShowing=true;
+       // CUT: move the same live DirectShow source from Preview to Program.
+       if(programShowing) { decShowing(programSource); programShowing=false; }
+       incShowing(dshowSource); cameraProgramShowing=true;
+       currentProgramSource=dshowSource;
        output(0,dshowSource);
-       Thread.Sleep(5000);
+       Thread.Sleep(2000);
        int captured=Volatile.Read(ref cameraFrames);
-       Console.WriteLine("DirectShow captured frames="+captured+" from "+firstCameraName+" | "+firstCameraId);
-       if(captured==0) throw new Exception("DirectShow camera was selected but no raw video frames arrived within 5 seconds.");
+       int previewAfterCut=Volatile.Read(ref previewDraws);
+       int programAfterCut=Volatile.Read(ref programDraws);
+       var activeProgram=Get<SourceGetOutput>(h,"obs_get_output_source")(0);
+       bool programUsesCamera=activeProgram==dshowSource;
+       if(activeProgram!=IntPtr.Zero) releaseSource(activeProgram);
+       Console.WriteLine("DirectShow Program CUT: frames="+captured+"; Preview draws="+previewAfterCut+"; Program draws="+programAfterCut+"; output-source-match="+programUsesCamera);
+       if(captured==0||!programUsesCamera||previewAfterCut<=previewBeforeCameraCut||programAfterCut==0)
+         throw new Exception("DirectShow Preview-to-Program CUT failed: camera frames or Program source were not confirmed.");
      } finally {
        output(0,IntPtr.Zero);
-       if(cameraShowing) decShowing(dshowSource);
        disconnect(cameraCallback,IntPtr.Zero);
      }
    }
@@ -322,6 +350,8 @@ public static class ObsDisplayProbe {
    }
    if(hwndProgram!=IntPtr.Zero) DestroyWindow(hwndProgram);
    if(hwndPreview!=IntPtr.Zero) DestroyWindow(hwndPreview);
+   if(cameraProgramShowing) decShowing(dshowSource);
+   if(cameraPreviewShowing) decShowing(dshowSource);
    if(previewShowing) decShowing(previewSource);
    if(programShowing) decShowing(programSource);
    if(dshowProperties!=IntPtr.Zero) propertiesDestroy(dshowProperties);
