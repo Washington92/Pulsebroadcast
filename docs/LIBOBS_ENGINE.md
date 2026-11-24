@@ -29,7 +29,7 @@ Para a integração completa, seguir a sequência documentada pelo OBS para inic
 2. Chamar `obs_startup()`.
 3. Configurar vídeo com `obs_reset_video()`.
 4. Configurar áudio com `obs_reset_audio()`.
-5. Registrar os caminhos de plugins com `obs_add_module_path()`, executar `obs_load_all_modules()` e `obs_post_load_modules()`.
+5. No pacote OBS 33.0.1, carregar explicitamente os módulos core necessários com `obs_load_plugins()` usando `OBS_MODULE_TYPE_CORE`, verificar `obs_module_failure_info` e chamar `obs_post_load_modules()`. Este probe headless não usa `obs_load_all_modules()` (API depreciada neste caminho) nem `obs_load_core_modules()` (que pode tentar iniciar módulos de frontend e hardware que o processo não hospeda).
 6. Criar e manter fontes/cenas com ownership explícito.
 7. Criar um `obs_display` para cada monitor, usando um `HWND` filho nativo.
 8. Conectar Preview, Program, CUT e FADE ao estado de cenas/fontes da libobs.
@@ -53,7 +53,7 @@ Critérios de aceite do primeiro pipeline audiovisual:
 `tests/libobs_preview_cut_smoke.ps1` foi ajustado para o contrato do OBS 33.0.1:
 
 - `obs_video_info.graphics_module` usa `libobs-d3d11`, não o caminho do DLL.
-- Configura áudio estéreo a 48 kHz e carrega somente o módulo core necessário ao teste, `image-source`, por `obs_load_plugins()` com `OBS_MODULE_TYPE_CORE`, seguido de `obs_post_load_modules()`. A rotina depreciada `obs_load_all_modules()` é vazia em OBS 33.0.1.
+- Configura áudio estéreo a 48 kHz e carrega os módulos core mínimos `image-source` e `win-dshow` por `obs_load_plugins()` com `OBS_MODULE_TYPE_CORE`, verificando falhas e chamando `obs_post_load_modules()`. A rotina depreciada `obs_load_all_modules()` é vazia em OBS 33.0.1.
 - Evita `obs_load_core_modules()` no probe headless: esse carregador tenta inicializar também módulos de frontend e hardware opcionais. O teste carrega apenas `core/image-source/image-source.dll`, verifica o contador de falhas e depois confirma o registro da fonte ao criar `color_source_v3`.
 - Mantém o diretório de trabalho em `bin/64bit`, pois o caminho do módulo core é relativo a esse diretório: `../../core/<module>/<module>.dll`, com dados em `../../core/<module>/data`.
 - Usa a assinatura oficial do OBS 33.0.1 `obs_display_create(gs_init_data*, uint32_t background_color)`; a cor inicial é passada na criação e pode ser atualizada depois por `obs_display_set_background_color()`.
@@ -79,6 +79,14 @@ O processo isolado registra `bin/64bit` com `AddDllDirectory`, define `LOAD_LIBR
 
 The Windows engine workflow also verifies the official core module at `core/win-dshow/win-dshow.dll`. The isolated probe loads `image-source` and `win-dshow` as core modules with `obs_load_plugins()`, then creates a non-visible `dshow_input` source and inspects its `video_device_id` property list.
 
-The probe logs each DirectShow device name and identifier returned by the module. A count of zero is accepted on hosted CI runners without physical capture hardware; in that case the test proves module loading, source registration, and availability of the device property, **not** camera capture or frame delivery. A physical webcam test on Windows 10/11 remains mandatory before claiming camera integration.
+The probe logs each DirectShow device name and identifier returned by the module. A count of zero is accepted on hosted CI runners without physical capture hardware; in that case the default test proves module loading, source registration, and availability of the device property, **not** camera capture or frame delivery. The default CI invocation intentionally does not pass `-CaptureCamera`.
 
-The test destroys the properties object and releases the temporary source before `obs_shutdown()`. It does not mark the source as showing or start a capture stream.
+For a physical Windows 10/11 x64 acceptance test, run the probe on a machine with an available camera that is not in use:
+
+```powershell
+pwsh -NoProfile -File tests/libobs_preview_cut_smoke.ps1 -ObsRoot "C:\Program Files\obs-studio" -CaptureCamera
+```
+
+With `-CaptureCamera`, the probe selects the first non-disabled DirectShow device, updates `video_device_id`, activates it, and renders that source in the Preview display while Program remains on the synthetic source. It then performs CUT to the same camera source in Program and checks source dimensions, continued Preview/Program draw callbacks, the Program output-source pointer, and raw video frames. The mode fails if no device is listed or no frames arrive; it is deliberately opt-in because hosted CI runners generally have no physical camera. This validates camera-to-Preview/Program inside the isolated probe, **not yet embedding those HWND displays into the Tauri interface**.
+
+The test destroys the properties object and releases the temporary source before `obs_shutdown()`. In the default mode it does not mark the DirectShow source as showing or start a capture stream.
