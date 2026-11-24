@@ -70,13 +70,16 @@ test("OBS 33.0.1 display interop passes the background color to both independent
   assert.ok(smoke.includes("displayProgram=createDisplay(ref infoProgram,0);"));
 });
 
-test("OBS 33.0.1 loads only the required image-source core module", () => {
+test("OBS 33.0.1 loads the required image-source and win-dshow core modules", () => {
   const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
   assert.ok(smoke.includes("struct RuntimeModuleInfo"));
   assert.ok(smoke.includes("struct ModuleFailureInfo"));
   assert.ok(smoke.includes('Get<LoadPlugins>(h,"obs_load_plugins")'));
   assert.ok(smoke.includes("type=1, // OBS_MODULE_TYPE_CORE"));
   assert.ok(smoke.includes('Path.Combine(root,"core","image-source","image-source.dll")'));
+  assert.ok(smoke.includes('Path.Combine(root,"core","win-dshow","win-dshow.dll")'));
+  assert.ok(smoke.includes('LoadCoreModule("image-source")'));
+  assert.ok(smoke.includes('LoadCoreModule("win-dshow")'));
   assert.ok(smoke.includes('Console.WriteLine("Loaded OBS core module: image-source")'));
   assert.ok(!smoke.includes('"obs_load_all_modules"'));
   assert.ok(!smoke.includes('"obs_load_core_modules"'));
