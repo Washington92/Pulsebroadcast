@@ -54,7 +54,7 @@ Critérios de aceite do primeiro pipeline audiovisual:
 
 - `obs_video_info.graphics_module` usa `libobs-d3d11`, não o caminho do DLL.
 - Configura áudio estéreo a 48 kHz e carrega os módulos core mínimos `image-source` e `win-dshow` por `obs_load_plugins()` com `OBS_MODULE_TYPE_CORE`, verificando falhas e chamando `obs_post_load_modules()`. A rotina depreciada `obs_load_all_modules()` é vazia em OBS 33.0.1.
-- Evita `obs_load_core_modules()` no probe headless: esse carregador tenta inicializar também módulos de frontend e hardware opcionais. O teste carrega apenas `core/image-source/image-source.dll`, verifica o contador de falhas e depois confirma o registro da fonte ao criar `color_source_v3`.
+- Evita `obs_load_core_modules()` no probe headless: esse carregador tenta inicializar também módulos de frontend e hardware opcionais. O teste carrega explicitamente `core/image-source/image-source.dll` e `core/win-dshow/win-dshow.dll`, verifica o contador de falhas e confirma o registro de `color_source_v3` e `dshow_input`.
 - Mantém o diretório de trabalho em `bin/64bit`, pois o caminho do módulo core é relativo a esse diretório: `../../core/<module>/<module>.dll`, com dados em `../../core/<module>/data`.
 - Usa a assinatura oficial do OBS 33.0.1 `obs_display_create(gs_init_data*, uint32_t background_color)`; a cor inicial é passada na criação e pode ser atualizada depois por `obs_display_set_background_color()`.
 - Mantém o estado de exibição da fonte com `obs_source_inc_showing()`/`obs_source_dec_showing()`.
