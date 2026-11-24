@@ -92,6 +92,25 @@ test("OBS 33.0.1 loads win-dshow and inspects DirectShow device properties", () 
   assert.ok(smoke.includes("No DirectShow cameras exposed by runner; plugin/source registration still validated."));
 });
 
+test("physical DirectShow capture is opt-in and exercises camera Preview to Program CUT", () => {
+  const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
+  const workflow = readFileSync(new URL("../.github/workflows/wmix-engine-validation.yml", import.meta.url), "utf8");
+  assert.ok(smoke.includes("[switch]$CaptureCamera"));
+  assert.ok(smoke.includes("public static void Run(string root,bool captureCamera)"));
+  assert.ok(smoke.includes('SetUtf8String(captureSettings,"video_device_id",firstCameraId)'));
+  assert.ok(smoke.includes('sourceUpdate(dshowSource,captureSettings)'));
+  assert.ok(smoke.includes("currentPreviewSource=dshowSource;"));
+  assert.ok(smoke.includes("cameraPreviewShowing=true;"));
+  assert.ok(smoke.includes('Get<SourceDimension>(h,"obs_source_get_width")'));
+  assert.ok(smoke.includes('Get<SourceDimension>(h,"obs_source_get_height")'));
+  assert.ok(smoke.includes("currentProgramSource=dshowSource;"));
+  assert.ok(smoke.includes("output(0,dshowSource);"));
+  assert.ok(smoke.includes('Get<SourceGetOutput>(h,"obs_get_output_source")(0)'));
+  assert.ok(smoke.includes("DirectShow Program CUT: frames="));
+  assert.ok(smoke.includes("disconnect(cameraCallback,IntPtr.Zero);"));
+  assert.ok(!workflow.includes("-CaptureCamera"));
+});
+
 test("libobs smoke test registers the OBS binary DLL path and resolves the core layout", () => {
   const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
   assert.ok(smoke.includes("SetDefaultDllDirectories(0x1000)"));
