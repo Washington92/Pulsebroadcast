@@ -87,6 +87,14 @@ For a physical Windows 10/11 x64 acceptance test, run the probe on a machine wit
 pwsh -NoProfile -File tests/libobs_preview_cut_smoke.ps1 -ObsRoot "C:\Program Files\obs-studio" -CaptureCamera
 ```
 
+The probe logs each DirectShow device's display name and identifier. To avoid relying on enumeration order, pass `-CameraId` with the exact device identifier (preferred) or display name copied from the log:
+
+```powershell
+pwsh -NoProfile -File tests/libobs_preview_cut_smoke.ps1 -ObsRoot "C:\Program Files\obs-studio" -CaptureCamera -CameraId "{DIRECTSHOW-DEVICE-ID}"
+```
+
+`-CameraId` is accepted only together with `-CaptureCamera`. If the requested ID/name is not present, the probe fails before activating another camera. Without `-CameraId`, the first non-disabled device remains the default.
+
 With `-CaptureCamera`, the probe selects the first non-disabled DirectShow device, updates `video_device_id`, activates it, and renders that source in the Preview display while Program remains on the synthetic source. It then performs CUT to the same camera source in Program and checks source dimensions, continued Preview/Program draw callbacks, the Program output-source pointer, and raw video frames. The mode fails if no device is listed or no frames arrive; it is deliberately opt-in because hosted CI runners generally have no physical camera. This validates camera-to-Preview/Program inside the isolated probe, **not yet embedding those HWND displays into the Tauri interface**.
 
 The test destroys the properties object and releases the temporary source before `obs_shutdown()`. In the default mode it does not mark the DirectShow source as showing or start a capture stream.
