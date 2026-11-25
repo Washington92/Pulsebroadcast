@@ -99,6 +99,13 @@ test("physical DirectShow capture is opt-in and exercises camera Preview to Prog
   const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
   const workflow = readFileSync(new URL("../.github/workflows/wmix-engine-validation.yml", import.meta.url), "utf8");
   assert.ok(smoke.includes("[switch]$CaptureCamera"));
+  assert.ok(smoke.includes("[string]$CameraId = ''"));
+  assert.ok(smoke.includes("string requestedCameraId"));
+  assert.ok(smoke.includes("requestedCameraFound"));
+  assert.ok(smoke.includes("String.Equals(id,requestedCameraId,StringComparison.OrdinalIgnoreCase)"));
+  assert.ok(smoke.includes("String.Equals(name,requestedCameraId,StringComparison.OrdinalIgnoreCase)"));
+  assert.ok(smoke.includes("Requested DirectShow camera ID/name was not found:"));
+  assert.ok(smoke.includes("[ObsDisplayProbe]::Run($ObsRoot,[bool]$CaptureCamera,$CameraId)"));
   assert.ok(smoke.includes("public static void Run(string root,bool captureCamera)"));
   assert.ok(smoke.includes('SetUtf8String(captureSettings,"video_device_id",firstCameraId)'));
   assert.ok(smoke.includes('sourceUpdate(dshowSource,captureSettings)'));
