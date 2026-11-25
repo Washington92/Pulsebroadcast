@@ -1,10 +1,14 @@
 param(
     [string]$ObsRoot = 'C:\Program Files\obs-studio',
     [switch]$CompileOnly,
-    [switch]$CaptureCamera
+    [switch]$CaptureCamera,
+    [string]$CameraId = ''
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not [string]::IsNullOrWhiteSpace($CameraId) -and -not $CaptureCamera) {
+    throw '-CameraId requires -CaptureCamera.'
+}
 if (-not $CompileOnly) {
     $ObsRoot = (Resolve-Path -LiteralPath $ObsRoot).Path
     $dll = Join-Path $ObsRoot 'bin/64bit/obs.dll'
@@ -81,7 +85,7 @@ public static class ObsDisplayProbe {
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void Draw(IntPtr param,uint width,uint height);
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void RegisterDraw(IntPtr display,Draw callback,IntPtr param);
  static T Get<T>(IntPtr h,string n) where T:Delegate => Marshal.GetDelegateForFunctionPointer<T>(GetProcAddress(h,n));
- public static void Run(string root,bool captureCamera){
+ public static void Run(string root,bool captureCamera,string requestedCameraId){
  string bin=Path.Combine(root,"bin","64bit");
  string coreImageSource=Path.Combine(root,"core","image-source","image-source.dll");
  string dshowModule=Path.Combine(root,"core","win-dshow","win-dshow.dll");
@@ -208,16 +212,25 @@ public static class ObsDisplayProbe {
    ulong deviceCount=propertyListItemCount(devices).ToUInt64();
    string firstCameraId=null;
    string firstCameraName=null;
+   bool requestedCameraFound=false;
    Console.WriteLine("DirectShow video_device_id entries="+deviceCount);
    for(ulong i=0;i<deviceCount;i++) {
      var name=Marshal.PtrToStringUTF8(propertyListItemName(devices,new UIntPtr(i))) ?? "";
      var id=Marshal.PtrToStringUTF8(propertyListItemString(devices,new UIntPtr(i))) ?? "";
      Console.WriteLine("  DirectShow "+(i+1)+": "+name+" | "+id);
-     if(firstCameraId==null && !String.IsNullOrWhiteSpace(id) && !String.Equals(id,"disabled",StringComparison.OrdinalIgnoreCase)) {
+     bool validCamera=!String.IsNullOrWhiteSpace(id) && !String.Equals(id,"disabled",StringComparison.OrdinalIgnoreCase);
+     if(validCamera && String.IsNullOrWhiteSpace(requestedCameraId) && firstCameraId==null) {
        firstCameraId=id;
        firstCameraName=name;
+     } else if(validCamera && !String.IsNullOrWhiteSpace(requestedCameraId) && !requestedCameraFound &&
+       (String.Equals(id,requestedCameraId,StringComparison.OrdinalIgnoreCase) || String.Equals(name,requestedCameraId,StringComparison.OrdinalIgnoreCase))) {
+       firstCameraId=id;
+       firstCameraName=name;
+       requestedCameraFound=true;
      }
    }
+   if(!String.IsNullOrWhiteSpace(requestedCameraId) && !requestedCameraFound)
+     throw new Exception("Requested DirectShow camera ID/name was not found: "+requestedCameraId);
    if(deviceCount==0)
      Console.WriteLine("No DirectShow cameras exposed by runner; plugin/source registration still validated.");
 
@@ -288,6 +301,7 @@ public static class ObsDisplayProbe {
    if(captureCamera) {
      if(String.IsNullOrWhiteSpace(firstCameraId))
        throw new Exception("CaptureCamera requested, but no DirectShow camera is available.");
+     Console.WriteLine("Selected DirectShow camera: "+firstCameraName+" | "+firstCameraId);
      var captureSettings=sourceGetSettings(dshowSource);
      if(captureSettings==IntPtr.Zero) throw new Exception("obs_source_get_settings failed for DirectShow capture");
      try {
@@ -378,4 +392,4 @@ if ($CompileOnly) {
     Write-Host 'C# libobs interop declarations compiled successfully; native OBS execution skipped.'
     return
 }
-[ObsDisplayProbe]::Run($ObsRoot,[bool]$CaptureCamera)
+[ObsDisplayProbe]::Run($ObsRoot,[bool]$CaptureCamera,$CameraId)
