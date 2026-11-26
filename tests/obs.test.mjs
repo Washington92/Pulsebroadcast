@@ -118,7 +118,7 @@ test("physical DirectShow capture is opt-in and exercises camera Preview to Prog
   assert.ok(smoke.includes("output(0,dshowSource);"));
   assert.ok(smoke.includes('Get<SourceGetOutput>(h,"obs_get_output_source")(0)'));
   assert.ok(smoke.includes("DirectShow Program CUT: frames="));
-  assert.ok(smoke.includes("output(0,IntPtr.Zero);\n     connect(IntPtr.Zero,cameraCallback,IntPtr.Zero);"));
+  assert.match(smoke,/output\(0,IntPtr\.Zero\);\s*connect\(IntPtr\.Zero,cameraCallback,IntPtr\.Zero\);/);
   assert.ok(smoke.includes("programAfterCut<=programBeforeCameraCut"));
   assert.ok(smoke.includes("disconnect(cameraCallback,IntPtr.Zero);"));
   assert.ok(!workflow.includes("-CaptureCamera"));
