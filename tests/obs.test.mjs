@@ -80,7 +80,7 @@ test("OBS 33.0.1 loads the required image-source and win-dshow core modules", ()
   assert.ok(smoke.includes('Path.Combine(root,"core","win-dshow","win-dshow.dll")'));
   assert.ok(smoke.includes('LoadCoreModule("image-source")'));
   assert.ok(smoke.includes('LoadCoreModule("win-dshow")'));
-  assert.ok(smoke.includes('Console.WriteLine("Loaded OBS core module: image-source")'));
+  assert.ok(smoke.includes('Console.WriteLine("Loaded OBS core module: "+moduleName);'));
   assert.ok(!smoke.includes('"obs_load_all_modules"'));
   assert.ok(!smoke.includes('"obs_load_core_modules"'));
 });
