@@ -3,37 +3,33 @@
 Arquivo: `src/integrations/obs/ObsWebSocketClient.ts`.
 
 ## Escopo implementado
+
 - Conexão explícita a URL `ws://` ou `wss://`.
 - Handshake OBS v5 (Hello/Identify/Identified), com autenticação challenge-response SHA-256 quando exigida.
-- Solicitações RPC com IDs e respostas correlacionadas.
-- Consulta de `GetStudioModeEnabled`, `GetCurrentProgramScene` e, quando Studio Mode estiver ativo, `GetCurrentPreviewScene`.
-- Eventos de alteração de cenas Preview/Program e Studio Mode (assinaturas Scenes e SceneItems).
-- Timeout de 10 segundos por requisição e validação de URLs sem credenciais embutidas.
-- Desconexão com rejeição das solicitações pendentes.
+- Solicitações RPC com IDs correlacionados, timeout e rejeição de pendências na desconexão.
+- Consulta de Studio Mode, cena atual de Program, cena de Preview e lista de cenas.
+- Eventos de alteração de cenas Preview/Program e Studio Mode.
+- Comandos `SetStudioModeEnabled`, `SetCurrentPreviewScene`, `SetCurrentProgramScene` e `TriggerStudioModeTransition`.
+- Painel opcional no wMix para preparar Preview, executar CUT direto para Program e TAKE com a transição atualmente selecionada no OBS.
 
 ## Limites
-O adaptador agora está conectado a um painel opcional na interface, com status e consulta de cenas. O painel não comanda CUT/TAKE no OBS, não transfere vídeo do OBS para o Canvas, não implementa reconexão automática e possui timeout individual de 10 segundos por requisição, mas ainda não implementa reconexão automática. O Preview/Program do Canvas permanece independente.
 
-Credenciais são fornecidas apenas em memória. **Não salve senhas em localStorage, URL, logs ou repositório.** Para aplicativos web hospedados em HTTPS, o navegador pode bloquear `ws://` por conteúdo misto. O ambiente Tauri/Windows e a conectividade com OBS real ainda exigem validação.
+O painel é um controle remoto do OBS Studio. Ele **não captura nem transporta o vídeo do OBS para os monitores Preview/Program do wMix**. O compositor local do wMix continua independente; a integração nativa libobs e os displays HWND no Tauri ainda estão em desenvolvimento. Não há reconexão automática.
 
-## Exemplo de integração futura
+O TAKE exige Studio Mode ativo e utiliza a transição selecionada no OBS. CUT usa `SetCurrentProgramScene` para trocar Program diretamente.
 
-```ts
-const obs = new ObsWebSocketClient();
-obs.onStateChange = state => console.info(state.connected, state.previewScene, state.programScene);
-await obs.connect("ws://127.0.0.1:4455", password);
-await obs.refresh();
-// Ao desmontar o componente:
-obs.disconnect();
-```
+Credenciais são fornecidas apenas em memória. **Não salve senhas em localStorage, URL, logs ou repositório.** Não exponha a porta WebSocket à internet; prefira loopback.
 
-## Checklist de validação pendente
-1. `npm install && npm test && npm run build` com Node.js 20+ (o CI executa os testes de protocolo simulados, sem OBS real).
-2. OBS Studio com WebSocket v5 ativo: testar conexão com e sem autenticação.
-3. Ativar/desativar Studio Mode e alternar Preview/Program; verificar eventos e refresh.
-4. Desligar OBS durante uma requisição; conferir rejeição e limpeza.
-5. Testar Windows 10/11 no Tauri; nunca considerar build web equivalente a teste desktop.
+## Validação automatizada
 
-## Painel visual (develop)
+`tests/obs.test.mjs` usa um WebSocket simulado para verificar handshake, snapshot Preview/Program, listagem de cenas, preparação de Preview, CUT, TAKE, validação de URL e limpeza das requisições pendentes. Isso não substitui um teste manual com OBS Studio 28+ ativo.
 
-O componente `src/components/pulse/ObsConnectionPanel.tsx` foi montado em `src/App.tsx`. Exibe status de conexão, endereço e senha (somente memória), OBS Preview e OBS Program, além de atualizar/desconectar. O compositor Canvas do wMix não é alterado. Ainda não há teste com OBS real nem confirmação de build após essa integração.
+## Checklist de homologação manual
+
+1. Habilitar OBS WebSocket v5 e testar conexão local com e sem autenticação.
+2. Atualizar a lista de cenas e confirmar Preview/Program no painel.
+3. Ativar Studio Mode, preparar outra cena e verificar o Preview no OBS.
+4. Executar CUT e confirmar alteração imediata de Program no OBS.
+5. Executar TAKE e confirmar que a transição selecionada no OBS é utilizada.
+6. Desligar o OBS durante uma requisição e conferir a desconexão e a limpeza do estado.
+7. Testar no Windows 10/11 com Tauri; build CI não equivale a homologação física.

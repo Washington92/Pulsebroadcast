@@ -49,6 +49,46 @@ test("OBS handshake and Preview/Program snapshot", async () => {
   assert.equal(client.snapshot().connected, false);
 });
 
+test("OBS remote scene control lists scenes and sends Preview, Program and Studio TAKE requests", async () => {
+  const { client, sockets } = harness();
+  const connection = client.connect("ws://127.0.0.1:4455");
+  const socket = sockets[0];
+  await socket.emit(0, { rpcVersion: 1 });
+  await socket.emit(2, { negotiatedRpcVersion: 1 });
+  await connection;
+
+  const listing = client.scenes();
+  const listRequest = socket.sent.at(-1);
+  assert.equal(listRequest.d.requestType, "GetSceneList");
+  await socket.emit(7, {
+    requestId: listRequest.d.requestId,
+    requestStatus: { result: true },
+    responseData: { scenes: [{ sceneName: "Live" }, { sceneName: "Next" }, { sceneName: "" }] }
+  });
+  assert.equal((await listing).join("|"), "Live|Next");
+
+  const respond = async (type, invoke) => {
+    const pending = invoke();
+    const request = socket.sent.at(-1);
+    assert.equal(request.d.requestType, type);
+    await socket.emit(7, {
+      requestId: request.d.requestId,
+      requestStatus: { result: true },
+      responseData: {}
+    });
+    await pending;
+  };
+
+  await assert.rejects(client.setCurrentPreviewScene("Next"), /Studio Mode/);
+  await respond("SetStudioModeEnabled", () => client.setStudioModeEnabled(true));
+  await respond("SetCurrentPreviewScene", () => client.setCurrentPreviewScene("Next"));
+  assert.equal(client.snapshot().previewScene, "Next");
+  await respond("SetCurrentProgramScene", () => client.setCurrentProgramScene("Live"));
+  assert.equal(client.snapshot().programScene, "Live");
+  await respond("TriggerStudioModeTransition", () => client.triggerStudioTransition());
+  client.disconnect();
+});
+
 test("OBS rejects URL credentials and rejects outstanding requests on disconnect", async () => {
   const { client, sockets } = harness();
   await assert.rejects(client.connect("ws://user:password@127.0.0.1:4455"));

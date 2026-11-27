@@ -138,6 +138,39 @@ export class ObsWebSocketClient {
     return this.snapshot();
   }
 
+  async scenes(): Promise<string[]> {
+    const response = await this.request("GetSceneList");
+    if (!Array.isArray(response.scenes)) throw new Error("OBS returned an invalid scene list.");
+    return response.scenes.flatMap(scene => {
+      if (!scene || typeof scene !== "object") return [];
+      const name = (scene as Record<string, unknown>).sceneName;
+      return typeof name === "string" && name.trim() ? [name] : [];
+    });
+  }
+
+  async setStudioModeEnabled(enabled: boolean): Promise<void> {
+    await this.request("SetStudioModeEnabled", { studioModeEnabled: enabled });
+    this.publish({ studioMode: enabled, ...(enabled ? {} : { previewScene: null }) });
+  }
+
+  async setCurrentPreviewScene(sceneName: string): Promise<void> {
+    if (!sceneName.trim()) throw new Error("Choose an OBS scene before preparing Preview.");
+    if (!this.state.studioMode) throw new Error("Enable OBS Studio Mode before preparing Preview.");
+    await this.request("SetCurrentPreviewScene", { sceneName });
+    this.publish({ previewScene: sceneName });
+  }
+
+  async setCurrentProgramScene(sceneName: string): Promise<void> {
+    if (!sceneName.trim()) throw new Error("Choose an OBS scene before changing Program.");
+    await this.request("SetCurrentProgramScene", { sceneName });
+    this.publish({ programScene: sceneName });
+  }
+
+  async triggerStudioTransition(): Promise<void> {
+    if (!this.state.studioMode) throw new Error("Enable OBS Studio Mode before taking Preview to Program.");
+    await this.request("TriggerStudioModeTransition");
+  }
+
   disconnect(): void {
     ++this.generation;
     const socket = this.socket;

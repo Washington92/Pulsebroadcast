@@ -8,9 +8,9 @@ O frontend React + TypeScript (Vite) utiliza um motor de composição **Canvas n
 
 O Preview de cenas preparadas usa Canvas independente; permite selecionar a câmera principal e uma fonte PiP. O FADE compõe a cena anterior em movimento quando a fonte anterior permanece disponível e recorre a um quadro congelado quando não permanece. A transição ainda requer testes com fontes físicas e cenários de perda de sinal.
 
-**OBS:** integração OBS WebSocket, controle de cenas/Preview/Program do OBS e sincronização de estado **ainda não estão implementados**. A integração será um adaptador opcional, sem substituir o motor independente. Não confundir o Preview/Program do motor Canvas com o modo Studio do OBS.
+**OBS Studio:** existe um adaptador opcional OBS WebSocket v5 com autenticação challenge-response, leitura de cenas/Studio Mode e comandos remotos para preparar Preview, executar CUT direto para Program e TAKE usando a transição selecionada no OBS. A conexão é explícita e as credenciais permanecem somente em memória. Esse controle remoto atua no OBS Studio; ele **não transporta o vídeo do OBS para os monitores do wMix** e não substitui o compositor local nem o futuro motor libobs.
 
-**Desktop:** há dependência de CLI Tauri, mas o empacotamento e a compatibilidade Windows 10/11 ainda precisam de validação real. Não há garantia de distribuição pronta.
+**Desktop:** o workflow Windows concluiu com sucesso o build Tauri e verificou a presença do FFmpeg no pacote no commit `9dc748f5`. Isso valida a compilação do instalador no CI, não a instalação em hardware físico nem a compatibilidade final em todas as máquinas Windows 10/11.
 
 ## Desenvolvimento
 
