@@ -129,8 +129,8 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const [panelLayout, setPanelLayout] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("wmix-panel-layout-v3") || "{}") as Record<string, number>;
-      return { preview: saved.preview ?? 50, inputs: saved.inputs ?? 62, upper: saved.upper ?? 410 };
-    } catch { return { preview: 50, inputs: 62, upper: 410 }; }
+      return { preview: saved.preview ?? 50, inputs: saved.inputs ?? 72, upper: saved.upper ?? 410 };
+    } catch { return { preview: 50, inputs: 72, upper: 410 }; }
   });
   const upperDeckRef = useRef<HTMLElement>(null);
   const lowerDeckRef = useRef<HTMLElement>(null);
@@ -189,9 +189,9 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const [elapsed, setElapsed] = useState(0);
   const [clock, setClock] = useState("--:--:--");
   const [bus, setBus] = useState({ master: 78, fone: 60, a: 70, b: 70, masterMute: false });
-  const [showVertical, setShowVertical] = useState(true);
+  const [showVertical, setShowVertical] = useState(false);
   const [vMode, setVMode] = useState<"safe" | "center" | "track">("center");
-  const [zoom, setZoom] = useState(6);
+  const [zoom, setZoom] = useState(5);
   const [tab, setTab] = useState("Preparar");
   const [manual, setManual] = useState(false);
   const animRef = useRef<number | null>(null);
@@ -313,7 +313,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
   const tabs = ["Preparar", "Editor", "Teleprompter", "Automações", "Ferramentas"];
 
   return (
-    <div className="flex h-screen min-h-0 min-w-[900px] flex-col gap-1.5 overflow-hidden bg-background p-2 font-sans text-foreground">
+    <div className="wmix-broadcast flex h-screen min-h-0 min-w-[900px] flex-col gap-1.5 overflow-hidden bg-background p-2 font-sans text-foreground">
       {obsError && <div role="alert" className="rounded bg-red-900 px-3 py-1 text-xs text-white">Erro de transmissão: {obsError}</div>}
       {/* ===== Top bar ===== */}
       <header className="wmix-toolbar flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 bg-panel px-3 py-2">
@@ -325,11 +325,11 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
           <span className="text-sm font-black italic tracking-tight">w<span className="text-primary">M</span>ix</span>
           <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-bold",
             streaming ? "bg-tally-pgm text-destructive-foreground" : "border border-primary text-primary")}>
-            {streaming ? "AO VIVO" : "PRONTO"}
+            {streaming ? "AO VIVO" : "BETA"}
           </span>
         </div>
         <button className={cn(btn, "h-9 shrink-0 justify-between px-2")}>
-          <span className="flex items-center gap-1.5 whitespace-nowrap"><FolderOpen className="h-3.5 w-3.5" />Show de lançamento</span>
+          <span className="flex items-center gap-1.5 whitespace-nowrap"><FolderOpen className="h-3.5 w-3.5" />Produção Principal</span>
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
         <nav aria-label="Áreas de trabalho" className="order-last flex min-w-0 basis-full gap-0.5 overflow-x-auto rounded-lg bg-background/70 p-1 2xl:order-none 2xl:basis-auto">
@@ -351,7 +351,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
       </header>
 
       {/* ===== Upper deck ===== */}
-      <section ref={upperDeckRef} className="grid min-h-[320px] shrink-0 gap-1" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px clamp(216px, 17vw, 260px) minmax(0,${100 - panelLayout.preview}fr)${showVertical ? " 130px" : ""}` }}>
+      <section ref={upperDeckRef} className="wmix-monitors grid min-h-[320px] shrink-0 gap-1.5" style={{ height: panelLayout.upper, gridTemplateColumns: `minmax(0,${panelLayout.preview}fr) 6px clamp(180px, 11vw, 220px) minmax(0,${100 - panelLayout.preview}fr)${showVertical ? " 130px" : ""}` }}>
         {/* Preview */}
         <div className="glow-pvw flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-xs">
@@ -403,7 +403,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
 
         <div role="separator" aria-label="Redimensionar Preview e Program" aria-orientation="vertical" title="Arraste para ajustar Preview e Program" onPointerDown={e => dragLayout(e, "preview")} className="cursor-col-resize rounded bg-border/50 hover:bg-slate-500 active:bg-slate-400" />
         {/* Center console — live switching desk */}
-        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto overscroll-contain wmix-scrollbar rounded-lg border border-border bg-card p-3">
+        <div className="wmix-transition-console flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto overscroll-contain wmix-scrollbar rounded-lg border border-border bg-card p-2">
           <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
             <div className="min-w-0"><div className="font-mono text-base font-bold tabular-nums tracking-wide">{clock}</div><div className="font-mono text-[10px] text-muted-foreground">{fmtElapsed(elapsed)}</div></div>
             <span className={cn("shrink-0 rounded border px-2 py-1 text-[10px] font-semibold", recording || streaming ? "border-primary text-primary" : "border-border text-muted-foreground")}>{recording ? "● REC" : streaming ? "● LIVE" : "EM ESPERA"}</span>
@@ -468,7 +468,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         {/* Program */}
         <div className="glow-pgm flex min-w-0 flex-col overflow-hidden rounded-md bg-card">
           <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-xs">
-            <span className="rounded bg-tally-pgm px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">PROGRAMA</span>
+            <span className="rounded bg-tally-pgm px-2 py-0.5 text-[10px] font-bold text-destructive-foreground">PROGRAM</span>
             <span className="font-mono text-muted-foreground">{currentProgramId || "—"}</span><span className="min-w-0 truncate font-medium">{pgm?.name ?? "Sem fonte"}</span>
             {streaming && <span className="ml-auto animate-pulse text-[10px] font-bold text-tally-pgm">● NO AR</span>}
           </div>
@@ -519,11 +519,11 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
         ))}
       </div>
 
-      <section ref={lowerDeckRef} className="grid min-h-0 flex-1 gap-1" style={{gridTemplateColumns: view === "Ambos" ? `minmax(0,${panelLayout.inputs}fr) 6px minmax(0,${100-panelLayout.inputs}fr)` : "minmax(0,1fr)"}}>
+      <section ref={lowerDeckRef} className="wmix-lower-deck grid min-h-0 flex-1 gap-1.5" style={{gridTemplateColumns: view === "Ambos" ? `minmax(0,${panelLayout.inputs}fr) 6px minmax(0,${100-panelLayout.inputs}fr)` : "minmax(0,1fr)"}}>
         {view !== "Mixer" && (
-          <div className="flex min-h-0 flex-col rounded-md border border-border bg-panel">
+          <div className="wmix-inputs-panel flex min-h-0 flex-col rounded-md border border-border bg-panel">
             <div className="mb-2 flex items-center gap-2 border-b border-border px-3 py-2">
-              <span className="text-xs font-semibold">Fontes</span>
+              <span className="text-xs font-semibold tracking-wide">INPUTS</span>
               <span className="font-mono text-xs text-muted-foreground">{sources.length}</span>
               <span className="ml-auto" />
               <button onClick={() => { if (nativeAdd) { try { void Promise.resolve(nativeAdd()).catch(e => setObsError(String(e))); } catch (e) { setObsError(String(e)); } } else addInput(); }} className={cn(btn, "h-8 border-primary/50 px-3 text-primary")}><Plus className="h-3.5 w-3.5" />Adicionar fonte</button>
@@ -532,7 +532,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
               <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Grade"><LayoutGrid className="h-3 w-3" /></button>
               <button className={cn(btn, "h-6 w-6 px-0")} aria-label="Destacar"><ExternalLink className="h-3 w-3" /></button>
             </div>
-            <div className="grid min-h-0 flex-1 auto-rows-min gap-2 overflow-y-auto wmix-scrollbar px-2 pb-2"
+            <div className="wmix-input-grid grid min-h-0 flex-1 auto-rows-min gap-2 overflow-y-auto wmix-scrollbar px-2 pb-2"
               style={{ gridTemplateColumns: `repeat(${zoom}, minmax(0, 1fr))` }}>
               {sources.map((s) => {
                 const isPgm = s.id === currentProgramId, isPvw = s.id === currentPreviewId;
@@ -601,7 +601,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
 
         {view === "Ambos" && <div role="separator" aria-label="Redimensionar Inputs e Mixer" aria-orientation="vertical" title="Arraste para ajustar Inputs e Mixer" onPointerDown={e => dragLayout(e, "inputs")} className="cursor-col-resize rounded bg-border/50 hover:bg-slate-500 active:bg-slate-400" />}
         {view !== "Inputs" && (
-          <div className="flex min-h-0 flex-col rounded-md border border-border bg-panel">
+          <div className="wmix-mixer-panel flex min-h-0 flex-col rounded-md border border-border bg-panel">
             <div className="flex items-center gap-1 p-2">
               <span className="text-[10px] font-bold tracking-wider text-muted-foreground">MIXER DE ÁUDIO</span>
               <span className="ml-auto text-[10px] text-muted-foreground">Buses: A–B</span>
@@ -710,7 +710,7 @@ export function Switcher({ nativeAudio = [], nativeAudioVolume, nativeAudioMute,
           <button type="button" aria-pressed={showVertical} onClick={() => setShowVertical(value => !value)} className={cn(btn, "h-7 px-3", showVertical && "text-primary")}><MonitorPlay className="h-3.5 w-3.5" />Monitor vertical</button>
           <button className={cn(btn, "h-7 px-3")}>Checar saída</button>
         </div>
-        <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 62, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
+        <button type="button" title="Restaurar tamanhos padrão dos painéis" onClick={() => setPanelLayout({ preview: 50, inputs: 72, upper: 410 })} className="rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground">Restaurar layout</button>
         <div className="ml-auto flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
           <span className="rounded border border-border px-3 py-1" role="status" aria-label="Desempenho de renderização"><Activity className="mr-1 inline h-3 w-3 text-primary" />{nativePerformance ? `FPS ${nativePerformance.fps} · Frames perdidos ${nativePerformance.droppedFrames}` : "Desempenho indisponível"}</span>
           <span className="flex items-center gap-1"><Wifi className={cn("h-3 w-3", streaming ? "text-tally-pvw" : "")} />RTMP {streaming ? "transmitindo via OBS" : "ocioso"}</span>
