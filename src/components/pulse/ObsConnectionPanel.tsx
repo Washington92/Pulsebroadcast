@@ -17,8 +17,25 @@ export function ObsConnectionPanel() {
   useEffect(() => {
     const obs = new ObsWebSocketClient();
     client.current = obs;
+    let active = true;
     obs.onStateChange = setState;
-    return () => { obs.onStateChange = undefined; obs.disconnect(); client.current = null; };
+    obs.onSceneListChanged = () => {
+      void obs.scenes().then(names => {
+        if (!active) return;
+        setScenes(names);
+        setSelectedScene(current => names.includes(current) ? current : names[0] ?? "");
+        setError("");
+      }).catch(reason => {
+        if (active) setError(reason instanceof Error ? reason.message : "Falha ao atualizar cenas do OBS.");
+      });
+    };
+    return () => {
+      active = false;
+      obs.onStateChange = undefined;
+      obs.onSceneListChanged = undefined;
+      obs.disconnect();
+      client.current = null;
+    };
   }, []);
 
   async function loadState() {

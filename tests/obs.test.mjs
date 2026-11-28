@@ -103,6 +103,28 @@ test("OBS rejects URL credentials and rejects outstanding requests on disconnect
 });
 
 
+test("OBS scene catalog change event notifies the UI without reconnecting", async () => {
+  const { client, sockets } = harness();
+  const connection = client.connect("ws://127.0.0.1:4455");
+  const socket = sockets[0];
+  await socket.emit(0, { rpcVersion: 1 });
+  await socket.emit(2, { negotiatedRpcVersion: 1 });
+  await connection;
+
+  let changes = 0;
+  client.onSceneListChanged = () => { changes++; };
+  await socket.emit(5, { eventType: "SceneListChanged", eventData: {} });
+  assert.equal(changes, 1);
+  client.disconnect();
+});
+
+test("OBS connection panel refreshes scene choices when OBS reports SceneListChanged", () => {
+  const panel = readFileSync(new URL("../src/components/pulse/ObsConnectionPanel.tsx", import.meta.url), "utf8");
+  assert.ok(panel.includes("obs.onSceneListChanged ="));
+  assert.ok(panel.includes("obs.scenes().then(names =>"));
+  assert.ok(panel.includes("setSelectedScene(current => names.includes(current) ? current : names[0] ?? \"\")"));
+});
+
 test("OBS 33.0.1 display interop passes the background color to both independent displays", () => {
   const smoke = readFileSync(new URL("./libobs_preview_cut_smoke.ps1", import.meta.url), "utf8");
   assert.ok(smoke.includes("delegate IntPtr DisplayCreate(ref DisplayInfo data,uint backgroundColor);"));

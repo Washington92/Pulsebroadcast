@@ -9,6 +9,7 @@ Arquivo: `src/integrations/obs/ObsWebSocketClient.ts`.
 - Solicitações RPC com IDs correlacionados, timeout e rejeição de pendências na desconexão.
 - Consulta de Studio Mode, cena atual de Program, cena de Preview e lista de cenas.
 - Eventos de alteração de cenas Preview/Program e Studio Mode.
+- Atualização automática da lista de cenas ao receber `SceneListChanged`, sem exigir reconexão.
 - Comandos `SetStudioModeEnabled`, `SetCurrentPreviewScene`, `SetCurrentProgramScene` e `TriggerStudioModeTransition`.
 - Painel opcional no wMix para preparar Preview, executar CUT direto para Program e TAKE com a transição atualmente selecionada no OBS.
 
@@ -33,3 +34,8 @@ Credenciais são fornecidas apenas em memória. **Não salve senhas em localStor
 5. Executar TAKE e confirmar que a transição selecionada no OBS é utilizada.
 6. Desligar o OBS durante uma requisição e conferir a desconexão e a limpeza do estado.
 7. Testar no Windows 10/11 com Tauri; build CI não equivale a homologação física.
+
+
+## Sincronização da lista de cenas
+
+Enquanto conectado, o cliente escuta o evento OBS `SceneListChanged` (assinatura Scenes) e solicita novamente `GetSceneList`. O painel atualiza o seletor sem derrubar a conexão e preserva a seleção atual quando a cena ainda existe; se ela foi removida, seleciona a primeira cena disponível. O botão **Atualizar** continua disponível para uma sincronização manual.

@@ -36,6 +36,7 @@ export class ObsWebSocketClient {
   private generation = 0;
   private state: ObsStudioState = { connected: false, studioMode: false, previewScene: null, programScene: null };
   onStateChange?: (state: ObsStudioState) => void;
+  onSceneListChanged?: () => void;
 
   snapshot(): ObsStudioState { return { ...this.state }; }
 
@@ -78,6 +79,7 @@ export class ObsWebSocketClient {
           } else if (message.op === 5) {
             const type = message.d?.eventType;
             const data = (message.d?.eventData ?? {}) as Record<string, unknown>;
+            if (type === "SceneListChanged") this.onSceneListChanged?.();
             if (type === "CurrentProgramSceneChanged") this.publish({ programScene: String(data.sceneName ?? "") });
             if (type === "CurrentPreviewSceneChanged") this.publish({ previewScene: String(data.sceneName ?? "") });
             if (type === "StudioModeStateChanged") this.publish({ studioMode: data.studioModeEnabled === true });
